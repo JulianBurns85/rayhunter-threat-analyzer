@@ -1,0 +1,53 @@
+# Rayhunter Threat Analyzer — Configuration
+# ==========================================
+# Edit this file to match your investigation parameters.
+
+network:
+  mcc: "505"          # Australia
+  mnc: "001"          # Telstra (use 003 for Vodafone AU)
+  country: "AU"
+  operator: "Telstra"
+
+opencellid:
+  enabled: false      # Set true and add your API key to enable rogue tower DB checks
+  api_key: ""         # Get free key at opencellid.org
+  cache_file: "cell_cache.json"
+  timeout_seconds: 5
+
+thresholds:
+  # IMSI Catcher detection: flag if >N identity requests in window
+  identity_request_window_seconds: 120
+  identity_request_max_normal: 2
+
+  # EARFCN hopping: flag if cell changes EARFCN >N times in window
+  earfcn_change_window_seconds: 60
+  earfcn_change_max_normal: 3
+
+  # Paging: flag if >N% of pages use IMSI (should be TMSI)
+  paging_imsi_ratio_threshold: 0.20
+
+  # Injected handover: flag if >N handovers occur without preceding MeasReport
+  handover_max_without_measreport: 2
+
+# Confirmed rogue cell IDs from your investigation.
+# Format: "<MCC>-<MNC>-<CELL_ID>": {notes: "..."}
+known_rogue_cells: {}
+
+# Known anomalous EARFCNs documented in your investigation
+known_rogue_earfcns: []
+
+# Hardware OUI prefixes for known attacker equipment
+ubiquiti_oui:
+  - "24:A4:3C"
+  - "FC:EC:DA"
+  - "78:8A:20"
+  - "B4:FB:E4"
+  - "00:27:22"
+
+hak5_oui:
+  - "00:13:37"
+
+output:
+  color: true
+  show_raw_evidence: true
+  max_evidence_lines: 5

@@ -1,0 +1,22 @@
+# Rayhunter Threat Analyzer — Python Dependencies
+# =================================================
+# Core (required)
+pyyaml>=6.0
+requests>=2.28.0
+rich>=13.0.0
+
+# PCAP parsing (requires tshark/Wireshark installed on system)
+# apt install tshark  OR  brew install wireshark
+pyshark>=0.6.0
+
+# Timestamp parsing
+python-dateutil>=2.8.2
+
+# Optional: SCAT for QMDL → PCAP conversion
+# pip install pySCAT  OR  git clone https://github.com/fgsect/scat
+
+# Optional: OpenCelliD / geolocation
+# (uses requests, already listed above)
+
+# Development / testing
+pytest>=7.0.0

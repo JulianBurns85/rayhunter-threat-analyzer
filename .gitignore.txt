@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Rayhunter data files - NEVER commit actual evidence
+*.ndjson
+*.pcap
+*.pcapng
+*.qmdl
+*.bin
+*.diag
+
+# Reports and manifests - generated output
+rayhunter_report_*.json
+rayhunter_report_*.html
+rayhunter_manifest_*.json
+rayhunter_manifest_*.csv
+rayhunter_flagged_*.pcapng
+
+# Forensic evidence
+*.docx
+*.pdf
+*.zip
+
+# Config overrides (keep template only)
+config_local.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+test_output/
