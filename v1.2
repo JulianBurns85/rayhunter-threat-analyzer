@@ -1,0 +1,13 @@
+## v1.2 — 18 April 2026
+### Fixed
+- MNC carrier attribution: NDJSON SIB1 beacons now propagate correct 
+  MNC to all events in the same capture session
+- PCAPNG format detection: basic parser now correctly refuses PCAPNG 
+  instead of producing garbage 1970 timestamps  
+- Cross-network sync detection: replaced hardcoded filename heuristics 
+  with MNC-based network classification
+- Cell summary: reads carrier from event data, not config default
+
+### Reference
+- Report REPORT_18.04.26 generated with this version
+- Submitted to ACMA ref ACMA-ENQ-1851DVJH04
