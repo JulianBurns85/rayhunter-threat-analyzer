@@ -31,7 +31,26 @@ thresholds:
 
 # Confirmed rogue cell IDs from your investigation.
 # Format: "<MCC>-<MNC>-<CELL_ID>": {notes: "..."}
-known_rogue_cells: {}
+# These will be flagged as CONFIRMED ROGUE regardless of OpenCelliD status.
+known_rogue_cells:
+  "505-01-137713195":
+    notes: "Primary rogue transmitter — 176 observations — CIRS-20260331-141 / ACMA-ENQ-1851DVJH04"
+  "505-01-137713175":
+    notes: "Rogue transmitter cluster TAC=12385 — 149 observations — cross-network confirmed"
+  "505-01-137713155":
+    notes: "Rogue transmitter cluster TAC=12385 — 63 observations — cross-network confirmed"
+  "505-01-137713165":
+    notes: "Rogue transmitter cluster TAC=12385 — 100 observations — first seen 2026-04-11"
+  "505-01-135836191":
+    notes: "Rogue transmitter cluster TAC=12385 — 334 observations — CIRS-20260331-141"
+  "505-03-8409357":
+    notes: "Vodafone-side rogue CID TAC=30336 — 49 observations — cross-network confirmed"
+  "505-03-8409367":
+    notes: "Vodafone-side rogue CID TAC=30336 — 32 observations — cross-network confirmed"
+  "505-03-8409387":
+    notes: "Vodafone-side rogue CID TAC=30336 — 40 observations — cross-network confirmed"
+  "505-03-8409397":
+    notes: "Vodafone-side rogue CID TAC=30336 — observed 2026-04-16"
 
 # Known anomalous EARFCNs documented in your investigation
 known_rogue_earfcns: []
@@ -50,4 +69,4 @@ hak5_oui:
 output:
   color: true
   show_raw_evidence: true
-  max_evidence_lines: 5
+  max_evidence_lines: 20

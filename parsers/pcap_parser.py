@@ -93,6 +93,8 @@ class PcapParser:
     def _parse_with_pyshark(self, filepath: str) -> List[Dict]:
         """Full dissection using pyshark + Wireshark dissectors."""
         import pyshark
+        import os
+        from datetime import datetime, timezone
         events = []
         self._ensure_event_loop()
 
@@ -120,6 +122,44 @@ class PcapParser:
             cap.close()
         except Exception:
             pass
+
+        # ── Timestamp validation ──────────────────────────────────────
+        # Detect boot-relative timestamps in pyshark output.
+        # If the max timestamp is before year 2000, pyshark read uptime
+        # values instead of wall-clock UTC. Apply the same mtime anchor
+        # correction as the basic parser.
+        YEAR_2000_TS = 946684800.0
+        if events:
+            ts_values = []
+            for ev in events:
+                try:
+                    ts_str = ev.get("timestamp", "")
+                    if ts_str and ts_str != "None":
+                        dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                        ts_values.append(dt.timestamp())
+                except Exception:
+                    pass
+
+            if ts_values and max(ts_values) < YEAR_2000_TS:
+                try:
+                    file_mtime = os.path.getmtime(filepath)
+                    max_rel = max(ts_values)
+                    ts_offset = file_mtime - max_rel
+                    print(f"    [INFO] {Path(filepath).name}: pyshark boot-relative "
+                          f"timestamps detected — applying mtime offset +{ts_offset:.0f}s")
+                    for ev in events:
+                        try:
+                            ts_str = ev.get("timestamp", "")
+                            if ts_str and ts_str != "None":
+                                dt = datetime.fromisoformat(
+                                    ts_str.replace("Z", "+00:00"))
+                                corrected = dt.timestamp() + ts_offset
+                                ev["timestamp"] = datetime.fromtimestamp(
+                                    corrected, tz=timezone.utc).isoformat()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
 
         return events
 

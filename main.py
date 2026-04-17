@@ -219,8 +219,33 @@ def main():
         action="store_true",
         help="Run cross-file timeline correlation analysis.",
     )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Watch mode: monitor --dir for new files and re-run automatically.",
+    )
+    parser.add_argument(
+        "--watch-interval",
+        type=int,
+        default=15,
+        metavar="SECONDS",
+        help="Seconds between scans in watch mode (default: 15).",
+    )
+    parser.add_argument(
+        "--compare",
+        nargs=2,
+        metavar=("REPORT_A", "REPORT_B"),
+        help="Compare two JSON reports (A=older, B=newer).",
+    )
 
     args = parser.parse_args()
+
+    # -- Delta report mode (--compare) ---
+    if hasattr(args, "compare") and args.compare:
+        from report_differ import diff_reports, print_diff
+        diff = diff_reports(args.compare[0], args.compare[1])
+        print_diff(diff)
+        sys.exit(0)
 
     if not args.file and not args.dir:
         parser.print_help()
@@ -253,6 +278,31 @@ def main():
     if args.manifest:
         out_dir = str(Path(args.output).parent) if args.output else "."
         generate_manifest(files, out_dir)
+
+    # -- Watch mode ---
+    if args.watch:
+        from watcher import DirectoryWatcher, print_watch_diff
+        dirs = [args.dir] if args.dir else []
+        last_findings = []
+
+        def on_new_files(new_paths):
+            nonlocal last_findings
+            all_files = collect_files(args.file, args.dir)
+            results = run_analysis(all_files, cfg, args.verbose)
+            rep = ThreatReporter(cfg)
+            report = rep.build_report(results, 0)
+            new_findings = report.get("findings", [])
+            print_watch_diff(last_findings, new_findings)
+            last_findings = new_findings
+            if any(f.get("severity") == "CRITICAL" for f in new_findings):
+                print("")  # terminal bell on CRITICAL
+
+        watcher = DirectoryWatcher(
+            dirs, interval_seconds=args.watch_interval,
+            on_new_files=on_new_files
+        )
+        watcher.watch()
+        sys.exit(0)
     
     print("─" * 62)
     print("PHASE 1 — PARSING")
