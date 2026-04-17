@@ -247,7 +247,18 @@ class PcapParser:
         Minimal PCAP parser that reads raw packets without Wireshark.
         Detects GSMTAP frame type and flags suspicious byte patterns.
         No full dissection — use only as fallback.
+
+        Timestamp correction: Rayhunter on Android sometimes stores
+        boot-relative timestamps (seconds since device boot) rather than
+        wall-clock UTC. These appear as 1970-01-0x dates. We detect this
+        by checking if the max ts_sec is below a plausibility threshold
+        (before year 2000 = Unix ts < 946684800). If so, we anchor the
+        final packet to the file's mtime and reconstruct absolute times
+        for all packets by preserving their relative spacing.
         """
+        import struct
+        import os
+
         events = []
         try:
             with open(filepath, "rb") as f:
@@ -262,14 +273,11 @@ class PcapParser:
             print(f"    [WARN] {Path(filepath).name}: not a valid PCAP file")
             return events
 
-        # Scan for GSMTAP signature (type byte 0x0d or 0x01 after magic header)
-        # GSMTAP header: version(1) + hdr_len(1) + type(1) + ...
-        GSMTAP_MAGIC = b"\x00\x00\x10\x00"  # common GSMTAP port = 4729
-        pkt_idx = 0
-        pos = 24  # skip global PCAP header
-
         byte_order = "<" if data[:4] == b"\xd4\xc3\xb2\xa1" else ">"
-        import struct
+
+        # ── Pass 1: collect all packets with GSMTAP content ──────────
+        raw_packets = []  # list of (ts_sec, ts_usec, pkt_data)
+        pos = 24  # skip global PCAP header
 
         while pos + 16 < len(data):
             try:
@@ -279,20 +287,46 @@ class PcapParser:
                 pos += 16
                 pkt_data = data[pos:pos + incl_len]
                 pos += incl_len
-                pkt_idx += 1
-
-                # Look for GSMTAP in UDP payload (port 4729 = 0x1279)
-                if b"\x12\x79" in pkt_data or b"\x79\x12" in pkt_data:
-                    ev = self._extract_gsmtap_basic(pkt_data, filepath, pkt_idx, ts_sec)
-                    if ev:
-                        events.append(ev)
+                raw_packets.append((ts_sec, ts_usec, pkt_data))
             except struct.error:
                 break
+
+        if not raw_packets:
+            return events
+
+        # ── Timestamp correction ──────────────────────────────────────
+        # Threshold: if max ts_sec < year 2000 (946684800), timestamps
+        # are boot-relative. Anchor last packet to file mtime.
+        YEAR_2000_TS = 946684800
+        max_ts_sec = max(p[0] for p in raw_packets)
+
+        ts_offset = 0.0
+        if max_ts_sec < YEAR_2000_TS:
+            try:
+                file_mtime = os.path.getmtime(filepath)
+                max_relative = max_ts_sec + max(p[1] for p in raw_packets) / 1e6
+                ts_offset = file_mtime - max_relative
+                print(f"    [INFO] {Path(filepath).name}: boot-relative timestamps "
+                      f"detected — anchoring to file mtime "
+                      f"(offset +{ts_offset:.0f}s)")
+            except Exception:
+                pass
+
+        # ── Pass 2: extract events with corrected timestamps ──────────
+        for pkt_idx, (ts_sec, ts_usec, pkt_data) in enumerate(raw_packets):
+            # Look for GSMTAP in UDP payload (port 4729 = 0x1279)
+            if b"\x12\x79" in pkt_data or b"\x79\x12" in pkt_data:
+                corrected_ts = ts_sec + ts_usec / 1e6 + ts_offset
+                ev = self._extract_gsmtap_basic(
+                    pkt_data, filepath, pkt_idx, corrected_ts
+                )
+                if ev:
+                    events.append(ev)
 
         return events
 
     def _extract_gsmtap_basic(self, pkt_data: bytes, source: str,
-                              idx: int, ts: int) -> Optional[Dict]:
+                              idx: int, ts: float) -> Optional[Dict]:
         """Extract GSMTAP type and basic NAS markers from raw packet bytes."""
         from datetime import datetime, timezone
 
