@@ -13,6 +13,11 @@ Rules:
   HIGH:     Cell appearing on unexpected EARFCN for this operator
   HIGH:     Abnormally strong signal (spoofed tower overpower)
   MEDIUM:   TAC not matching operator's known deployment area
+
+FIX v1.2:
+  - Cell summary now reads MCC/MNC from event data (corrected by NDJSON
+    propagation pass) rather than from config. Previously always showed
+    MNC=001 (Telstra) even for Vodafone captures.
 """
 
 import json
@@ -23,13 +28,11 @@ from .base import BaseDetector, make_finding
 
 
 # Known EARFCNs for Telstra AU (MCC=505 MNC=001) LTE bands
-# Band 28 (700 MHz): 9210-9659 (DL), Band 3 (1800 MHz): 1200-1949
-# Band 1 (2100 MHz): 0-599, Band 7 (2600 MHz): 2750-3449
 TELSTRA_EARFCN_RANGES = [
     (0, 599),       # Band 1 (2100 MHz)
     (1200, 1949),   # Band 3 (1800 MHz)
     (2750, 3449),   # Band 7 (2600 MHz)
-    (9210, 9659),   # Band 28 (700 MHz APT) — primary regional
+    (9210, 9659),   # Band 28 (700 MHz APT)
 ]
 
 # Vodafone AU (MCC=505 MNC=003) LTE bands
@@ -41,9 +44,18 @@ VODAFONE_EARFCN_RANGES = [
 ]
 
 OPERATOR_EARFCNS = {
-    "505-001": TELSTRA_EARFCN_RANGES,   # Telstra
-    "505-003": VODAFONE_EARFCN_RANGES,  # Vodafone AU
-    "505-006": [(1200, 1949), (9210, 9659), (3450, 3799)],  # Optus AU
+    "505-001": TELSTRA_EARFCN_RANGES,
+    "505-01":  TELSTRA_EARFCN_RANGES,
+    "505-003": VODAFONE_EARFCN_RANGES,
+    "505-03":  VODAFONE_EARFCN_RANGES,
+    "505-006": [(1200, 1949), (9210, 9659), (3450, 3799)],
+    "505-06":  [(1200, 1949), (9210, 9659), (3450, 3799)],
+}
+
+CARRIER_NAMES = {
+    "505-001": "Telstra AU", "505-01": "Telstra AU",
+    "505-003": "Vodafone AU", "505-03": "Vodafone AU",
+    "505-006": "Optus AU", "505-06": "Optus AU",
 }
 
 
@@ -63,33 +75,39 @@ class RogueTowerDetector(BaseDetector):
     def analyze(self, events: List[Dict]) -> List[Dict]:
         findings = []
 
-        # Collect unique cells observed
         cells = self._collect_cells(events)
         if not cells:
             return findings
 
-        operator_key = f"{self.mcc}-{self.mnc}"
-
-        # ── Rule 6 placeholder (moved to end) ────────────────────────
-        # Always report what cells were seen, for cross-reference evidence
+        # ── Cell summary — always report what was observed ────────────
         all_cells = [c for c in cells if c.get("cell_id")]
-        if all_cells and not any(
-            f.get("title", "").startswith("Cell Summary") for f in findings
-        ):
+        if all_cells:
             cell_summary = []
             for c in all_cells:
+                # ── FIX: read MCC/MNC from event data, not config ─────
+                # The NDJSON propagation pass stamps each event with the
+                # true network MNC extracted from SIB1 beacons. Use that
+                # rather than the config default (which may be wrong carrier).
+                cell_mcc, cell_mnc = self._get_cell_network(c)
                 cell_summary.append(
                     f"CID={c.get('cell_id')} TAC={c.get('tac','?')} "
-                    f"MCC={self.mcc} MNC={self.mnc} "
-                    f"observations={len(c.get('events',[]))}"
+                    f"MCC={cell_mcc} MNC={cell_mnc} "
+                    f"observations={len(c.get('events', []))}"
                 )
-            if len(all_cells) >= 2:
+
+            if len(all_cells) >= 1:
+                # Determine dominant network for description text
+                dom_mcc, dom_mnc = self._dominant_network(all_cells)
+                op_key = f"{dom_mcc}-{dom_mnc}"
+                op_name = CARRIER_NAMES.get(op_key, f"MCC={dom_mcc} MNC={dom_mnc}")
+
                 findings.append(make_finding(
                     detector=self.name,
                     title=f"Cell Summary — {len(all_cells)} Unique Cell ID(s) Observed",
                     description=(
-                        f"{len(all_cells)} unique Cell IDs observed across all captures. "
-                        f"Cross-reference these against Telstra's registered cell database "
+                        f"{len(all_cells)} unique Cell IDs observed across all captures "
+                        f"({op_name}). "
+                        f"Cross-reference these against the registered cell database "
                         f"to identify any synthetic/rogue towers."
                     ),
                     severity="INFO",
@@ -104,10 +122,7 @@ class RogueTowerDetector(BaseDetector):
                     ),
                 ))
 
-        return findings
-
-        operator_key = f"{self.mcc}-{self.mnc}"
-
+        # ── Per-cell analysis ─────────────────────────────────────────
         for cell in cells:
             cell_id = cell.get("cell_id")
             earfcn   = cell.get("earfcn")
@@ -115,18 +130,21 @@ class RogueTowerDetector(BaseDetector):
             rsrp     = cell.get("rsrp")
             ev_list  = cell.get("events", [])
 
+            # Use event-level network for per-cell checks
+            cell_mcc, cell_mnc = self._get_cell_network(cell)
+            operator_key = f"{cell_mcc}-{cell_mnc}"
+
             # ── Rule 1: Known rogue cell from config ──────────────────
-            # Check both MNC formats: "001" and "01" (SIB1 uses short form)
             mnc_short = self.mnc.lstrip("0") or "0"
             rogue_key = f"{self.mcc}-{self.mnc}-{cell_id}"
             rogue_key_short = f"{self.mcc}-{mnc_short}-{cell_id}"
-            matched_key = rogue_key if rogue_key in self.known_rogue_cells else (
-                rogue_key_short if rogue_key_short in self.known_rogue_cells else None
+            matched_key = (
+                rogue_key if rogue_key in self.known_rogue_cells
+                else rogue_key_short if rogue_key_short in self.known_rogue_cells
+                else None
             )
             if matched_key:
-                rogue_key = matched_key
-            if rogue_key in self.known_rogue_cells or (matched_key and matched_key in self.known_rogue_cells):
-                info = self.known_rogue_cells.get(rogue_key) or self.known_rogue_cells.get(rogue_key_short) or {}
+                info = self.known_rogue_cells.get(matched_key) or {}
                 findings.append(make_finding(
                     detector=self.name,
                     title=f"CONFIRMED ROGUE CELL: Cell ID {cell_id}",
@@ -147,14 +165,14 @@ class RogueTowerDetector(BaseDetector):
 
             # ── Rule 2: OpenCelliD lookup ─────────────────────────────
             if cell_id and self.opencellid_cfg.get("enabled", False):
-                db_result = self._lookup_opencellid(cell_id, self.mcc, self.mnc, tac)
+                db_result = self._lookup_opencellid(cell_id, cell_mcc, cell_mnc, tac)
                 if db_result is None:
                     findings.append(make_finding(
                         detector=self.name,
                         title=f"Cell ID {cell_id} Not in OpenCelliD Database",
                         description=(
-                            f"Cell ID {cell_id} (MCC={self.mcc} MNC={self.mnc} TAC={tac}) "
-                            f"is not registered in the OpenCelliD crowd-sourced cell tower database. "
+                            f"Cell ID {cell_id} (MCC={cell_mcc} MNC={cell_mnc} TAC={tac}) "
+                            f"is not registered in the OpenCelliD crowd-sourced database. "
                             f"Legitimate operator towers are typically present in OpenCelliD. "
                             f"An unlisted cell is a strong indicator of a synthetic/rogue tower."
                         ),
@@ -163,9 +181,9 @@ class RogueTowerDetector(BaseDetector):
                         technique="Rogue Cell — not in public cell database",
                         evidence=self._fmt_cell(cell, ev_list),
                         events=ev_list,
-                        hardware_hint="Potential rogue eNodeB or picocell not in operator's registered network",
+                        hardware_hint="Potential rogue eNodeB not in operator's registered network",
                         action=(
-                            "1. Verify with Telstra's network engineering team.\n"
+                            "1. Verify with carrier's network engineering team.\n"
                             "2. Submit cell ID + GPS coordinates to ACMA for investigation.\n"
                             "3. Cross-reference with Rayhunter Unit 2 timeline."
                         ),
@@ -194,35 +212,33 @@ class RogueTowerDetector(BaseDetector):
                 ranges = OPERATOR_EARFCNS[operator_key]
                 in_band = any(lo <= int(earfcn) <= hi for lo, hi in ranges)
                 if not in_band:
+                    op_name = CARRIER_NAMES.get(operator_key, operator_key)
                     findings.append(make_finding(
                         detector=self.name,
-                        title=f"EARFCN {earfcn} Outside {self._op_name()} Operating Bands",
+                        title=f"EARFCN {earfcn} Outside {op_name} Operating Bands",
                         description=(
-                            f"EARFCN {earfcn} is not within any known {self._op_name()} LTE "
+                            f"EARFCN {earfcn} is not within any known {op_name} LTE "
                             f"frequency band in Australia. Expected bands: "
-                            f"{', '.join(f'{lo}-{hi}' for lo,hi in ranges)}. "
-                            f"A rogue tower may be operating on an unlicensed or unexpected frequency."
+                            f"{', '.join(f'{lo}-{hi}' for lo, hi in ranges)}. "
+                            f"A rogue tower may be operating on an unexpected frequency."
                         ),
                         severity="HIGH",
                         confidence="PROBABLE",
                         technique="Rogue Tower — anomalous EARFCN / out-of-band operation",
                         evidence=self._fmt_cell(cell, ev_list),
                         events=ev_list,
-                        hardware_hint="SDR-based rogue eNodeB (software-defined radio can operate on any frequency)",
+                        hardware_hint="SDR-based rogue eNodeB",
                         action=(
-                            "Note the exact EARFCN and any signal strength data. "
-                            "Report anomalous EARFCN to ACMA — operating outside licensed spectrum "
-                            "is a breach of the Radiocommunications Act 1992."
+                            "Report anomalous EARFCN to ACMA — operating outside licensed "
+                            "spectrum is a breach of the Radiocommunications Act 1992."
                         ),
                         spec_ref="Radiocommunications Act 1992 (Cth)",
                     ))
 
-            # ── Rule 5: Abnormally strong signal (overpower attack) ────
+            # ── Rule 5: Abnormally strong signal ──────────────────────
             if rsrp is not None:
                 try:
                     rsrp_val = float(rsrp)
-                    # Normal LTE RSRP: -70 to -100 dBm at typical distances
-                    # Rogue towers often overpowered: > -60 dBm
                     if rsrp_val > -55:
                         findings.append(make_finding(
                             detector=self.name,
@@ -238,13 +254,44 @@ class RogueTowerDetector(BaseDetector):
                             technique="Signal Overpower Attack — rogue tower dominance",
                             evidence=self._fmt_cell(cell, ev_list),
                             events=ev_list,
-                            hardware_hint="High-power rogue eNodeB (deliberate overpower to attract devices)",
+                            hardware_hint="High-power rogue eNodeB",
                             action="Correlate RSRP spikes with identity request events to confirm attack.",
                         ))
                 except (ValueError, TypeError):
                     pass
 
         return findings
+
+    def _get_cell_network(self, cell: Dict) -> tuple:
+        """
+        Extract MCC/MNC from the cell's event data.
+        Prefers non-default MNC values (from SIB1 propagation pass).
+        Falls back to config defaults.
+        """
+        config_mnc = self.mnc
+        best_mcc, best_mnc = self.mcc, self.mnc
+
+        for ev in cell.get("events", []):
+            mnc = ev.get("mnc")
+            mcc = ev.get("mcc", self.mcc)
+            if mnc and mnc != config_mnc:
+                # Non-default = explicitly read from SIB1 beacon data
+                return mcc, mnc
+            elif mnc:
+                best_mcc, best_mnc = mcc, mnc
+
+        return best_mcc, best_mnc
+
+    def _dominant_network(self, cells: List[Dict]) -> tuple:
+        """Find the most-observed network across all cells."""
+        from collections import Counter
+        counts = Counter()
+        for cell in cells:
+            mcc, mnc = self._get_cell_network(cell)
+            counts[(mcc, mnc)] += len(cell.get("events", []))
+        if counts:
+            return counts.most_common(1)[0][0]
+        return self.mcc, self.mnc
 
     def _collect_cells(self, events: List[Dict]) -> List[Dict]:
         """Group events by cell ID and deduplicate."""
@@ -269,55 +316,43 @@ class RogueTowerDetector(BaseDetector):
                     "events": [],
                 }
             cell_map[key]["events"].append(ev)
-            # Track best (highest) RSRP reading
-            if rsrp and (cell_map[key]["rsrp"] is None or
-                         (cell_map[key]["rsrp"] is not None and
-                          float(str(rsrp).replace("dBm","").strip()) >
-                          float(str(cell_map[key]["rsrp"]).replace("dBm","").strip()))):
+            if rsrp:
                 try:
-                    cell_map[key]["rsrp"] = float(str(rsrp).replace("dBm","").strip())
+                    rsrp_f = float(str(rsrp).replace("dBm", "").strip())
+                    cur = cell_map[key]["rsrp"]
+                    if cur is None or rsrp_f > float(str(cur).replace("dBm", "").strip()):
+                        cell_map[key]["rsrp"] = rsrp_f
                 except (ValueError, TypeError):
                     pass
 
         return list(cell_map.values())
 
-    def _lookup_opencellid(self, cell_id: str, mcc: str, mnc: str,
-                            tac: str) -> Optional[Dict]:
-        """Query OpenCelliD API (or cache) for cell registration."""
+    def _lookup_opencellid(self, cell_id, mcc, mnc, tac) -> Optional[Dict]:
         cache_key = f"{mcc}-{mnc}-{cell_id}-{tac}"
         if cache_key in self._cell_cache:
             return self._cell_cache[cache_key]
 
         api_key = self.opencellid_cfg.get("api_key", "")
         if not api_key:
-            return {}  # Return empty dict (not None) = skip
+            return {}
 
         try:
             import requests
-            url = "https://opencellid.org/cell/get"
-            params = {
-                "token": api_key,
-                "mcc": mcc,
-                "mnc": mnc,
-                "lac": tac or 0,
-                "cellid": cell_id,
-                "format": "json",
-            }
-            resp = requests.get(url, params=params,
-                                timeout=self.opencellid_cfg.get("timeout_seconds", 5))
+            resp = requests.get(
+                "https://opencellid.org/cell/get",
+                params={"token": api_key, "mcc": mcc, "mnc": mnc,
+                        "lac": tac or 0, "cellid": cell_id, "format": "json"},
+                timeout=self.opencellid_cfg.get("timeout_seconds", 5)
+            )
             data = resp.json()
-            if data.get("status") == "ok":
-                self._cell_cache[cache_key] = data
-                self._save_cache()
-                return data
-            elif data.get("status") == "error":
-                self._cell_cache[cache_key] = None
-                self._save_cache()
-                return None
-        except Exception as e:
-            pass
-
-        return {}
+            result = data if data.get("status") == "ok" else (
+                None if data.get("status") == "error" else {}
+            )
+            self._cell_cache[cache_key] = result
+            self._save_cache()
+            return result
+        except Exception:
+            return {}
 
     def _load_cache(self) -> dict:
         cache_file = self.opencellid_cfg.get("cache_file", "cell_cache.json")
@@ -335,23 +370,20 @@ class RogueTowerDetector(BaseDetector):
         except Exception:
             pass
 
-    def _op_name(self) -> str:
-        key = f"{self.mcc}-{self.mnc}"
-        return {
-            "505-001": "Telstra AU",
-            "505-003": "Vodafone AU",
-            "505-006": "Optus AU",
-        }.get(key, f"MCC={self.mcc} MNC={self.mnc}")
-
     def _fmt_cell(self, cell: Dict, events: List[Dict]) -> List[str]:
+        mcc, mnc = self._get_cell_network(cell)
         lines = [
             f"Cell ID:  {cell.get('cell_id', '?')}",
             f"EARFCN:   {cell.get('earfcn', '?')}",
             f"TAC/LAC:  {cell.get('tac', '?')}",
+            f"MCC/MNC:  {mcc}/{mnc}",
             f"RSRP:     {cell.get('rsrp', '?')} dBm",
             f"Events:   {len(events)} observation(s)",
         ]
         if events:
             first = events[0]
-            lines.append(f"First seen: {first.get('timestamp','?')} in {first.get('source_file','?')}")
+            lines.append(
+                f"First seen: {first.get('timestamp','?')} "
+                f"in {first.get('source_file','?')}"
+            )
         return lines

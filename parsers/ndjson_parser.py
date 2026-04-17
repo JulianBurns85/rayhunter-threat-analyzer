@@ -44,6 +44,13 @@ KEY FACTS:
   - Threat identity comes from the array INDEX matching analyzers[] from header
   - SIB1 messages encode cell_id and TAC in the message string → parsed here
   - "Test Analyzer" (index 6) fires on every SIB1 — useful for cell extraction but noisy
+
+FIX v1.2:
+  - MNC/MCC propagation: after parsing, NAS events (Identity Requests etc.) inherit
+    the MNC/MCC discovered from SIB1 beacon events in the same capture file.
+    Previously NAS events kept the config-default MNC (001) even when SIB1 events
+    correctly identified the network as Vodafone (MNC=03). This broke cross-network
+    correlation in timeline_correlator.py.
 """
 
 import json
@@ -144,6 +151,18 @@ SIB1_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+# ── Australian MNC lookup ─────────────────────────────────────────────
+AUS_MNC_CARRIERS = {
+    "01": "Telstra",
+    "001": "Telstra",
+    "02": "Optus",
+    "002": "Optus",
+    "03": "Vodafone",
+    "003": "Vodafone",
+    "04": "Vodafone",
+    "004": "Vodafone",
+}
+
 
 class NdjsonParser:
     def __init__(self, cfg: dict):
@@ -180,7 +199,60 @@ class NdjsonParser:
                 if event:
                     events.append(event)
 
+        # ── MNC/MCC propagation pass ──────────────────────────────────
+        # SIB1 beacon events carry the true PLMN (MCC/MNC) from the cell.
+        # NAS events (Identity Requests, SMCs, etc.) occur during the same
+        # capture session but have no PLMN field — they keep the config
+        # default. This pass finds the inferred MNC from SIB1 events and
+        # applies it to all events in this file that still have the default.
+        inferred_mcc, inferred_mnc = self._infer_network(events)
+        if inferred_mnc and inferred_mnc != self.mnc:
+            carrier = AUS_MNC_CARRIERS.get(inferred_mnc, f"MNC={inferred_mnc}")
+            print(f"    [NET] {path.name}: inferred network = "
+                  f"MCC={inferred_mcc} MNC={inferred_mnc} ({carrier})")
+            for ev in events:
+                if ev.get("mnc") == self.mnc:
+                    ev["mnc"] = inferred_mnc
+                if ev.get("mcc") == self.mcc and inferred_mcc:
+                    ev["mcc"] = inferred_mcc
+                # Store carrier name for use by correlator
+                ev["carrier"] = carrier
+
         return events
+
+    def _infer_network(self, events: List[Dict]):
+        """
+        Find the MCC/MNC from SIB1 beacon events in this capture file.
+        Returns (mcc, mnc) or (None, None) if not determinable.
+        Uses the most frequently observed PLMN to handle edge cases where
+        a rogue cell briefly advertises a different PLMN.
+        """
+        from collections import Counter
+        plmn_counts = Counter()
+        for ev in events:
+            cid = ev.get("cell_id")
+            mnc = ev.get("mnc")
+            mcc = ev.get("mcc")
+            # Only count events where MNC was actually extracted from SIB1
+            # (not the config default)
+            if cid and mnc and mnc != self.mnc:
+                plmn_counts[(mcc, mnc)] += 1
+            elif cid and mnc == self.mnc:
+                # Could still be legitimate if MNC genuinely is 001
+                # Count these too but with lower weight
+                pass
+
+        if plmn_counts:
+            # Most common non-default PLMN wins
+            (mcc, mnc), _ = plmn_counts.most_common(1)[0]
+            return mcc, mnc
+
+        # Fallback: if all SIB1 events have the default MNC, accept it
+        for ev in events:
+            if ev.get("cell_id") and ev.get("mnc"):
+                return ev.get("mcc"), ev.get("mnc")
+
+        return None, None
 
     def _parse_header(self, raw: dict):
         """Extract ordered analyzer names from the header line."""
@@ -212,6 +284,7 @@ class NdjsonParser:
             "harness_alerts": [],
             "rayhunter_severity": None,
             "threats": [],
+            "carrier": None,
         }
 
         # ── Timestamp ─────────────────────────────────────────────────
@@ -222,8 +295,6 @@ class NdjsonParser:
         )
 
         # ── Process events[] array ─────────────────────────────────────
-        # Each position maps to the analyzer at the same index in _analyzers[].
-        # event_type = severity level. message = human description.
         rayhunter_events = raw.get("events") or []
         harness_alerts = []
 
@@ -272,14 +343,16 @@ class NdjsonParser:
             if sib1_match:
                 ev["cell_id"] = ev["cell_id"] or sib1_match.group(1)
                 ev["tac"]     = ev["tac"]     or sib1_match.group(2)
-                plmn = sib1_match.group(3)  # "505-01" → MCC=505 MNC=01
+                plmn = sib1_match.group(3)  # e.g. "505-03" → MCC=505 MNC=03
                 if "-" in plmn:
-                    parts = plmn.split("-")
+                    parts = plmn.split("-", 1)
                     ev["mcc"] = parts[0]
-                    ev["mnc"] = parts[1].zfill(2) if len(parts) > 1 else self.mnc
+                    # Preserve original MNC digits — don't zfill to 2 as some
+                    # PLMNs use 3-digit MNC. Keep as-is from the beacon.
+                    ev["mnc"] = parts[1] if len(parts) > 1 else self.mnc
                 # SIB1 events alone are not threats — skip harness alert unless higher severity
                 if severity == "LOW" and not matched:
-                    continue  # Skip adding to harness_alerts for Low SIB1 noise
+                    continue
 
             # Build harness alert string (skip Low-severity Test Analyzer SIB1 noise)
             is_sib1_noise = (
@@ -325,7 +398,7 @@ class NdjsonParser:
             ev["has_prose"],
             ev["has_mobility_control"],
             ev["harness_alerts"],
-            ev["cell_id"],   # SIB1-extracted cell data
+            ev["cell_id"],
         ])
         return ev if has_signal else None
 
