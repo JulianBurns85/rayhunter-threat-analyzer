@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Evidence / capture files — DO NOT COMMIT
+*.ndjson
+*.qmdl
+*.pcap
+*.pcapng
+*.json
+*.csv
+!requirements*.txt
+
+# Reports (generated output)
+rayhunter_report_*.json
+rayhunter_manifest_*.csv
+rayhunter_manifest_*.json
+*.html
+
+# Logs
+*.log
+*.txt
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Patch/dev artifacts (internal only)
+patch_*.py
+fix_*.py
+*_patches.py
+*_additions.py
+*.bak*
+diagnose.py
+python_check_cells.py
+check_cells.py
+
+# Database
+*.db
+*.sqlite
+intelligence/db/
+
+# Sensitive
+config_local.yaml
+secrets.yaml

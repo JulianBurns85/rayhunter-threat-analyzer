@@ -1,0 +1,182 @@
+# Rayhunter Threat Analyzer — Configuration
+# ==========================================
+# Edit this file to match your investigation parameters.
+
+network:
+  mcc: "505"          # Australia
+  mnc: "001"          # Telstra (use 003 for Vodafone AU)
+  country: "AU"
+  operator: "Telstra"
+
+opencellid:
+  enabled: false      # Set true and add your API key to enable rogue tower DB checks
+  api_key: ""         # Get free key at opencellid.org
+  cache_file: "cell_cache.json"
+  timeout_seconds: 5
+
+thresholds:
+  # IMSI Catcher detection: flag if >N identity requests in window
+  identity_request_window_seconds: 120
+  identity_request_max_normal: 2
+
+  # EARFCN hopping: flag if cell changes EARFCN >N times in window
+  earfcn_change_window_seconds: 60
+  earfcn_change_max_normal: 3
+
+  # Paging: flag if >N% of pages use IMSI (should be TMSI)
+  paging_imsi_ratio_threshold: 0.20
+
+  # Injected handover: flag if >N handovers occur without preceding MeasReport
+  handover_max_without_measreport: 2
+
+# Confirmed rogue cell IDs from your investigation.
+# Format: "<MCC>-<MNC>-<CELL_ID>": {notes: "..."}
+# These will be flagged as CONFIRMED ROGUE regardless of OpenCelliD status.
+known_rogue_cells:
+  "505-01-137713195":
+    notes: "Primary rogue transmitter — 176 observations — CIRS-20260331-141 / ACMA-ENQ-1851DVJH04"
+  "505-01-137713175":
+    notes: "Rogue transmitter cluster TAC=12385 — 149 observations — cross-network confirmed"
+  "505-01-137713155":
+    notes: "Rogue transmitter cluster TAC=12385 — 63 observations — cross-network confirmed"
+  "505-01-137713165":
+    notes: "Rogue transmitter cluster TAC=12385 — 100 observations — first seen 2026-04-11"
+  "505-01-135836191":
+    notes: "Rogue transmitter cluster TAC=12385 — 334 observations — CIRS-20260331-141"
+  "505-03-8409357":
+    notes: "Vodafone-side rogue CID TAC=30336 — 49 observations — cross-network confirmed"
+  "505-03-8409367":
+    notes: "Vodafone-side rogue CID TAC=30336 — 32 observations — cross-network confirmed"
+  "505-03-8409387":
+    notes: "Vodafone-side rogue CID TAC=30336 — 40 observations — cross-network confirmed"
+  "505-03-8409397":
+    notes: "Vodafone-side rogue CID TAC=30336 — observed 2026-04-16"
+
+# Known anomalous EARFCNs documented in your investigation
+known_rogue_earfcns: []
+
+# Hardware OUI prefixes for known attacker equipment
+ubiquiti_oui:
+  - "24:A4:3C"
+  - "FC:EC:DA"
+  - "78:8A:20"
+  - "B4:FB:E4"
+  - "00:27:22"
+
+hak5_oui:
+  - "00:13:37"
+
+output:
+  color: true
+  show_raw_evidence: true
+  max_evidence_lines: 20
+
+# ── v2.0 Detection Thresholds (Tucker et al. 2025, Braunschmied 2025) ─────────
+thresholds_v2:
+
+  # Null cipher — any occurrence is CRITICAL
+  null_cipher_alert_threshold: 1
+
+  # RRC Periodicity (srsRAN 210.2s fingerprint — FIELD CONFIRMED)
+  rrc_periodicity_target_seconds: 210.2
+  rrc_periodicity_variance_threshold: 0.5
+  rrc_periodicity_min_cycles: 10
+  rrc_periodicity_baseline_variance: 3.8   # Legitimate network baseline std dev
+
+  # Marlin IMSI Exposure Ratio (Tucker et al. NDSS 2025)
+  marlin_legitimate_baseline: 0.03         # <3% = legitimate LTE network
+  marlin_elevated_threshold: 0.03          # >3%  = MEDIUM
+  marlin_high_threshold: 0.10              # >10% = HIGH
+  marlin_critical_threshold: 0.25          # >25% = p<<0.005 CRITICAL
+  marlin_min_connections: 20               # Min connections for statistical validity
+
+  # SUCI-Catcher (Braunschmied TU Wien 2025)
+  suci_replay_window_seconds: 60
+  suci_min_replays: 2
+  suci_aka_failure_rate_threshold: 0.10    # >10% AKA failures = anomalous
+
+  # Overshadow Attack (Tucker et al. 2025)
+  overshadow_min_clean_events: 10
+  overshadow_clean_cell_score_threshold: 0.70
+
+# ── Detector Control ────────────────────────────────────────────────────────
+detectors:
+  identity_harvest:
+    enabled: true
+    extended_catalog: true            # Use full 53-message Marlin catalog
+  cipher_downgrade:
+    enabled: true
+  rogue_tower:
+    enabled: true
+  handover_inject:
+    enabled: true
+  proximity_track:
+    enabled: true
+  paging_anomaly:
+    enabled: true
+  earfcn_anomaly:
+    enabled: true
+  rrc_periodicity:
+    enabled: true
+    target_period_seconds: 210.2
+    field_confirmed: true             # CIRS-20260331-141
+  marlin_exposure_rate:
+    enabled: true                     # Tucker et al. NDSS 2025 causal detection
+  suci_catcher:
+    enabled: true                     # 5G SA SUCI-Catcher detection
+  overshadow:
+    enabled: true                     # Overshadow attack detection
+
+# ── Hardware Fingerprinting ─────────────────────────────────────────────────
+hardware_fingerprinting:
+  enabled: true
+  devices:
+    - harris_hailstorm
+    - harris_kingfish
+    - harris_stingray2
+    - pki_1625
+    - pki_1650
+    - srsran_4g                       # 210.2s cycle fingerprint FIELD CONFIRMED
+    - srsran_5g_sa                    # SUCI-Catcher capable (Braunschmied 2025)
+    - unknown_commercial
+    - unknown_opensource
+    - overshadow_platform
+
+# ── Investigation Context ────────────────────────────────────────────────────
+investigation:
+  case_references:
+    - "CIRS-20260331-141"             # Victoria Police
+    - "ENQ-1851DVJH04"               # ACMA
+    - "TIO 2026-03-04898"            # TIO
+  investigator: "Julian Burns"
+  location: "Cranbourne East, Victoria, Australia"
+  reporting_standard: "ACMA Radiocommunications Act 1992 s.189"
+
+# ── Research Citations ───────────────────────────────────────────────────────
+citations:
+  - id: tucker_2025_marlin
+    authors: "Tucker, Bennett, Kotuliak, Erni, Capkun, Butler, Traynor"
+    title: "Detecting IMSI-Catchers by Characterizing Identity Exposing Messages in Cellular Traffic"
+    venue: "NDSS 2025"
+    key_contribution: "53-message catalog, 3% baseline, causal vs correlated paradigm"
+  - id: braunschmied_2025_suci
+    authors: "Braunschmied, Maximilian"
+    title: "Countering SUCI-Catcher: Practical Implementation and Mitigation Against SUCI Replay Attacks"
+    venue: "TU Wien Diploma Thesis, April 2025"
+    key_contribution: "5G SA SUCI-Catcher attack + Bloom filter mitigation"
+  - id: ransacked_2024
+    authors: "Bennett et al."
+    title: "RANsacked: A Domain-Informed Approach for Fuzzing LTE and 5G RAN-Core Interfaces"
+    venue: "CCS 2024"
+    key_contribution: "119 CVEs, 18% incidents from BS equipment"
+  - id: seaglass_2017
+    authors: "Ney, Smith, Cadamuro, Kohno"
+    title: "SeaGlass: Enabling City-Wide IMSI-Catcher Detection"
+    venue: "PoPETs 2017"
+    key_contribution: "BCCH outlier signatures, city-wide deployment methodology"
+  - id: burns_2026_field
+    authors: "Julian Burns"
+    title: "Forensic Investigation: Rogue Cellular Infrastructure, Cranbourne East VIC"
+    venue: "Independent field investigation 2025-2026"
+    case_refs: "CIRS-20260331-141, ENQ-1851DVJH04, TIO 2026-03-04898"
+    key_contribution: "210.2s fingerprint confirmed, cross-carrier Cell ID overlap, 195x Identity Request flood"
