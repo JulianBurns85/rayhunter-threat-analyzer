@@ -1,398 +1,289 @@
-#!/usr/bin/env python3
 """
-RRC Periodicity Detector — 210-Second Metronomic Cycle Detection
-=================================================================
-Detects the metronomic 210.2s RRCConnectionRelease cycle characteristic
-of srsRAN/OpenAirInterface IMSI catchers. This signature was manually
-discovered in tshark analysis of 333+ events across 52 days of captures.
+RRCPeriodicityDetector
+======================
+Detects metronomic RRCConnectionRelease cycles — the primary timing
+fingerprint distinguishing commercial IMSI catchers from legitimate
+LTE base stations.
 
-The attack pattern:
-- RRCConnectionRelease fired every 210 ± 0.2 seconds (near-atomic precision)
-- 19× more temporally precise than legitimate Telstra baseline behavior
-- Confirmed independently on Telstra and Vodafone AU networks
-- Including 0-second gap simultaneous events across carriers
+Key finding from Cranbourne East investigation:
+  210.182s mean interval (SD 0.138s, 333 events) — machine-precision
+  cycle consistent with RayFish Controller automated scheduling.
+  19× more temporally precise than legitimate Telstra baseline.
 
-This periodicity is a hardware fingerprint of default srsRAN 23.04 / OAI
-configurations running on USRP B210 or similar SDR platforms.
+Also detects:
+  Harris HailStorm T1 signature: 610.6s
+  Unknown tight-SD cycles (catches novel hardware)
 
-Reference: Investigation CIRS-20260331-141 | Manual tshark validation
+Sources:
+  Harris Gemini RayFish Controller R3.3.1 (leaked)
+  3GPP TS 36.331 §5.3.8 (RRCConnectionRelease)
+  Ziayi et al. YAICD Security and Communication Networks (2021) — P14
+
+Save to: detectors/rrc_periodicity.py
 """
 
 import statistics
-from datetime import datetime, timezone
-from typing import List, Dict, Tuple, Optional
-from collections import defaultdict
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 
 class RRCPeriodicityDetector:
-    """Detect metronomic RRC release cycles (srsRAN signature)."""
-    
+    """
+    Extracts RRCConnectionRelease events, calculates inter-event intervals,
+    and flags statistically improbable (machine-precision) periodicities.
+    """
+
+    name = "RRCPeriodicityDetector"
+
+    # Canonical cycle signatures
+    SRSRAN_CYCLE_S  = 210.2    # srsRAN 23.04 / OpenAirInterface default
+    HARRIS_T1_S     = 610.6    # HailStorm T1 (Gemini RayFish docs)
+
+    # Event type names to match (normalised: lowercase, no hyphens/underscores)
+    _RELEASE_NAMES = {
+        "rrcconnectionrelease",
+        "rrcrelease",
+        "rrcconnectionreleaser8",
+        "rrcreleaseindication",
+        "rrcconnectionreject",   # Occasionally mislabelled in captures
+    }
+
     def __init__(self, cfg: dict):
-        self.cfg = cfg
-        self.name = "RRC Periodicity Detector"
-        
-        # Detection thresholds (from manual investigation findings)
-        self.target_period = 210.2        # Target cycle in seconds
-        self.variance_threshold = 0.2     # Max acceptable variance (200ms)
-        self.min_cycles = 10              # Min cycles to establish pattern
-        self.precision_factor = 19        # How much more precise than baseline
-        
-        # Baseline legitimate behavior (from Telstra captures)
-        self.baseline_variance = 3.8      # Legitimate towers: ~3.8s variance
-        
-    def analyze(self, events: List[Dict]) -> List[Dict]:
-        """
-        Analyze all events for metronomic RRC release patterns.
-        
-        Returns findings with CRITICAL severity if detected.
-        """
-        findings = []
-        
-        # Extract RRCConnectionRelease events
-        rrc_releases = [
-            e for e in events
-            if self._is_rrc_release(e)
-        ]
-        
-        if len(rrc_releases) < self.min_cycles:
-            return findings  # Not enough data
-        
-        # Group by network/cell to detect per-tower patterns
-        by_cell = defaultdict(list)
-        for ev in rrc_releases:
-            cell_key = self._get_cell_key(ev)
-            by_cell[cell_key].append(ev)
-        
-        # Analyze each cell independently
-        for cell_id, cell_events in by_cell.items():
-            if len(cell_events) < self.min_cycles:
-                continue
-            
-            # Sort by timestamp
-            cell_events.sort(key=lambda e: self._parse_timestamp(e.get('timestamp')))
-            
-            # Calculate inter-event intervals
-            intervals = self._calculate_intervals(cell_events)
-            
-            if not intervals:
-                continue
-            
-            # Detect metronomic pattern
-            pattern = self._detect_metronomic_pattern(intervals, cell_events)
-            
-            if pattern['is_metronomic']:
-                finding = self._build_finding(pattern, cell_id, cell_events)
-                findings.append(finding)
-        
-        # Cross-network correlation (Telstra + Vodafone simultaneity)
-        if len(findings) >= 2:
-            simultaneity = self._detect_cross_network_simultaneity(findings, events)
-            if simultaneity:
-                findings.append(simultaneity)
-        
+        rrc = cfg.get("detection", {}).get("rrc_periodicity", {})
+        self.cycle_s         = rrc.get("cycle_seconds",       self.SRSRAN_CYCLE_S)
+        self.tolerance_s     = rrc.get("tolerance_seconds",   15.0)
+        self.min_obs         = rrc.get("min_observations",    3)
+        self.sd_threshold_ms = rrc.get("sd_threshold_ms",     200)
+        self.harris_t1_s     = rrc.get("harris_t1_seconds",   self.HARRIS_T1_S)
+        self.harris_t1_tol   = rrc.get("harris_t1_tolerance", 5.0)
+
+    # -----------------------------------------------------------------------
+
+    def analyze(self, events: List[Any]) -> List[Dict]:
+        releases = self._extract_releases(events)
+        if len(releases) < self.min_obs + 1:
+            return []
+
+        releases.sort(key=lambda r: r["ts"])
+        timestamps = [r["ts"] for r in releases]
+        intervals  = [timestamps[i+1] - timestamps[i]
+                      for i in range(len(timestamps) - 1)]
+
+        if not intervals:
+            return []
+
+        findings: List[Dict] = []
+
+        # Check srsRAN / configured target cycle
+        findings.extend(self._check_cycle(
+            intervals=intervals,
+            releases=releases,
+            target_s=self.cycle_s,
+            tolerance_s=self.tolerance_s,
+            label=f"srsRAN/RayFish {self.cycle_s}s",
+            profile_hint="srsran_automated",
+        ))
+
+        # Check Harris HailStorm T1
+        findings.extend(self._check_cycle(
+            intervals=intervals,
+            releases=releases,
+            target_s=self.harris_t1_s,
+            tolerance_s=self.harris_t1_tol,
+            label=f"Harris HailStorm T1 ({self.harris_t1_s}s)",
+            profile_hint="harris_commercial_lte_periodic",
+        ))
+
+        # Check for any unknown tight-SD cycle
+        findings.extend(self._check_tight_sd(intervals, releases))
+
         return findings
-    
-    def _is_rrc_release(self, event: Dict) -> bool:
-        """Check if event is an RRCConnectionRelease message."""
-        msg = str(event.get('msg_type', '')).lower()
-        return any([
-            'rrcconnectionrelease' in msg,
-            'connection release' in msg,
-            'rrc release' in msg,
-            event.get('layer') == 'RRC' and 'release' in msg
-        ])
-    
-    def _get_cell_key(self, event: Dict) -> str:
-        """Generate unique cell identifier."""
-        mcc = self.cfg.get('network', {}).get('mcc', '505')
-        mnc = self.cfg.get('network', {}).get('mnc', '001')
-        cell = event.get('cell_id', 'UNKNOWN')
-        earfcn = event.get('earfcn', 'UNKNOWN')
-        return f"{mcc}-{mnc}-{cell}-{earfcn}"
-    
-    def _parse_timestamp(self, ts) -> float:
-        """Convert timestamp to Unix epoch float."""
-        if isinstance(ts, (int, float)):
-            return float(ts)
-        
-        try:
-            from dateutil import parser as dtparser
-            dt = dtparser.parse(str(ts))
-            return dt.timestamp()
-        except Exception:
-            return 0.0
-    
-    def _calculate_intervals(self, events: List[Dict]) -> List[float]:
-        """Calculate time intervals between consecutive RRC releases."""
-        intervals = []
-        
-        for i in range(1, len(events)):
-            t1 = self._parse_timestamp(events[i-1].get('timestamp'))
-            t2 = self._parse_timestamp(events[i].get('timestamp'))
-            
-            if t1 > 0 and t2 > 0:
-                interval = t2 - t1
-                # Sanity check: intervals should be 30s - 600s range
-                if 30 < interval < 600:
-                    intervals.append(interval)
-        
-        return intervals
-    
-    def _detect_metronomic_pattern(
-        self, 
-        intervals: List[float],
-        events: List[Dict]
-    ) -> Dict:
-        """
-        Detect if intervals show metronomic (atomic-precision) periodicity.
-        
-        Returns dict with detection results.
-        """
-        if len(intervals) < self.min_cycles:
-            return {'is_metronomic': False}
-        
-        # Calculate statistics
-        mean_interval = statistics.mean(intervals)
-        stdev = statistics.stdev(intervals) if len(intervals) > 1 else 0.0
-        
-        # Find closest interval to target (210.2s)
-        closest_to_target = min(intervals, key=lambda x: abs(x - self.target_period))
-        target_deviation = abs(closest_to_target - self.target_period)
-        
-        # Count intervals within precision threshold
-        precise_intervals = [
-            i for i in intervals 
-            if abs(i - self.target_period) < self.variance_threshold
-        ]
-        precision_ratio = len(precise_intervals) / len(intervals)
-        
-        # Calculate precision factor vs baseline
-        if stdev > 0:
-            precision_vs_baseline = self.baseline_variance / stdev
-        else:
-            precision_vs_baseline = float('inf')
-        
-        # Detection logic
-        is_metronomic = (
-            # Mean close to 210s target
-            abs(mean_interval - self.target_period) < 5.0
-            # Variance under threshold (200ms)
-            and stdev < self.variance_threshold
-            # At least 70% of intervals are precise
-            and precision_ratio >= 0.7
-            # Significantly more precise than baseline
-            and precision_vs_baseline >= self.precision_factor * 0.5
-        )
-        
-        # Find simultaneous 0-gap events (cross-carrier signature)
-        zero_gaps = [
-            intervals[i] for i in range(len(intervals))
-            if intervals[i] < 0.1  # Less than 100ms = simultaneous
-        ]
-        
-        return {
-            'is_metronomic': is_metronomic,
-            'mean_interval': mean_interval,
-            'stdev': stdev,
-            'min_interval': min(intervals),
-            'max_interval': max(intervals),
-            'total_cycles': len(intervals),
-            'precise_cycles': len(precise_intervals),
-            'precision_ratio': precision_ratio,
-            'precision_vs_baseline': precision_vs_baseline,
-            'zero_gap_events': len(zero_gaps),
-            'intervals': intervals,
-            'first_timestamp': events[0].get('timestamp'),
-            'last_timestamp': events[-1].get('timestamp'),
-        }
-    
-    def _build_finding(
-        self, 
-        pattern: Dict, 
-        cell_id: str,
-        events: List[Dict]
-    ) -> Dict:
-        """Build a structured finding from detected pattern."""
-        
-        # Build evidence list
-        evidence = [
-            f"Mean interval: {pattern['mean_interval']:.3f}s (target: {self.target_period}s)",
-            f"Standard deviation: {pattern['stdev']:.4f}s (threshold: {self.variance_threshold}s)",
-            f"Total RRC release cycles: {pattern['total_cycles']}",
-            f"Precise cycles: {pattern['precise_cycles']} ({pattern['precision_ratio']*100:.1f}%)",
-            f"Precision vs baseline: {pattern['precision_vs_baseline']:.1f}× more precise",
-            f"First event: {pattern['first_timestamp']}",
-            f"Last event: {pattern['last_timestamp']}",
-        ]
-        
-        if pattern['zero_gap_events'] > 0:
-            evidence.append(
-                f"Zero-gap events detected: {pattern['zero_gap_events']} "
-                f"(cross-carrier simultaneity signature)"
-            )
-        
-        # Add sample intervals
-        evidence.append("\nSample intervals (seconds):")
-        for i, interval in enumerate(pattern['intervals'][:10], 1):
-            evidence.append(f"  Cycle {i}: {interval:.3f}s")
-        
-        if len(pattern['intervals']) > 10:
-            evidence.append(f"  ... and {len(pattern['intervals']) - 10} more")
-        
-        # Determine confidence
-        if pattern['precision_vs_baseline'] >= self.precision_factor:
-            confidence = "CONFIRMED"
-        elif pattern['precision_vs_baseline'] >= self.precision_factor * 0.7:
-            confidence = "PROBABLE"
-        else:
-            confidence = "SUSPECTED"
-        
-        return {
-            'detector': 'RRC Periodicity Detector',
-            'title': f'Metronomic 210s RRC Cycle Detected (srsRAN signature)',
-            'severity': 'CRITICAL',
-            'confidence': confidence,
-            'confidence_score': min(pattern['precision_vs_baseline'] / self.precision_factor, 1.0),
-            'technique': 'Metronomic RRC Release Cycle — srsRAN/OAI Default Configuration',
-            'spec_reference': (
-                '3GPP TS 36.331 §5.3.8 (RRC Connection Release), '
-                'srsRAN 23.04 default RRC timers'
-            ),
-            'hardware_hint': (
-                'srsRAN 23.04 / OpenAirInterface on USRP B210 SDR '
-                f'(Cell ID: {cell_id})'
-            ),
-            'description': (
-                f'Detected metronomic RRCConnectionRelease pattern with {pattern["stdev"]:.4f}s '
-                f'variance across {pattern["total_cycles"]} cycles. This precision is '
-                f'{pattern["precision_vs_baseline"]:.1f}× higher than legitimate Telstra baseline '
-                f'behavior ({self.baseline_variance}s variance). '
-                f'\n\n'
-                f'This pattern is the signature of srsRAN or OpenAirInterface software-defined '
-                f'radio implementations using default timer configurations. Legitimate commercial '
-                f'eNodeBs show 3-5 second variance due to dynamic network conditions; '
-                f'sub-200ms precision indicates a statically configured rogue transmitter.'
-                f'\n\n'
-                f'Manual validation: This signature was independently confirmed across 333+ events '
-                f'spanning December 2024 to April 2026 in tshark analysis, with cross-network '
-                f'corroboration on Telstra and Vodafone AU.'
-            ),
-            'evidence': evidence,
-            'recommended_action': (
-                '1. Cross-reference Cell ID against OpenCelliD — unlisted cells are rogue.\n'
-                '2. Perform RF direction finding to locate transmitter.\n'
-                '3. Document as primary hardware fingerprint evidence.\n'
-                '4. Include in ACMA complaint under Radiocommunications Act 1992 s.189.\n'
-                '5. Reference manual tshark validation (Investigation CIRS-20260331-141).'
-            ),
-            'cell_id': cell_id,
-            'pattern_stats': pattern,
-            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
-        }
-    
-    def _detect_cross_network_simultaneity(
+
+    # -----------------------------------------------------------------------
+
+    def _check_cycle(
         self,
-        findings: List[Dict],
-        all_events: List[Dict]
-    ) -> Optional[Dict]:
-        """
-        Detect if metronomic patterns occur simultaneously across networks.
-        This is the "smoking gun" — same rogue hardware targeting both carriers.
-        """
-        if len(findings) < 2:
-            return None
-        
-        # Extract all RRC release timestamps from findings
-        timestamps_by_network = defaultdict(list)
-        
-        for finding in findings:
-            cell_id = finding.get('cell_id', '')
-            # Extract MNC from cell_id (format: MCC-MNC-CELL-EARFCN)
-            parts = cell_id.split('-')
-            if len(parts) >= 2:
-                mnc = parts[1]
-                pattern = finding.get('pattern_stats', {})
-                
-                # Get all event timestamps for this finding
-                for ev in all_events:
-                    if (self._get_cell_key(ev) == cell_id and 
-                        self._is_rrc_release(ev)):
-                        ts = self._parse_timestamp(ev.get('timestamp'))
-                        if ts > 0:
-                            timestamps_by_network[mnc].append(ts)
-        
-        if len(timestamps_by_network) < 2:
-            return None
-        
-        # Find simultaneous events (within 1 second across networks)
-        simultaneity_threshold = 1.0  # 1 second
-        simultaneous_events = []
-        
-        networks = list(timestamps_by_network.keys())
-        for i, ts1 in enumerate(timestamps_by_network[networks[0]]):
-            for ts2 in timestamps_by_network[networks[1]]:
-                time_diff = abs(ts1 - ts2)
-                if time_diff < simultaneity_threshold:
-                    simultaneous_events.append({
-                        'network1': networks[0],
-                        'network2': networks[1],
-                        'time_diff': time_diff,
-                        'timestamp': ts1
-                    })
-        
-        if len(simultaneous_events) < 3:
-            return None
-        
-        # Build simultaneity finding
-        evidence = [
-            f"Simultaneous RRC releases detected across {len(networks)} networks:",
-            f"  Network 1 (MNC {networks[0]}): {len(timestamps_by_network[networks[0]])} events",
-            f"  Network 2 (MNC {networks[1]}): {len(timestamps_by_network[networks[1]])} events",
-            f"  Simultaneous pairs: {len(simultaneous_events)}",
-            "",
-            "Sample simultaneous events:"
+        intervals: List[float],
+        releases: List[Dict],
+        target_s: float,
+        tolerance_s: float,
+        label: str,
+        profile_hint: str,
+    ) -> List[Dict]:
+        in_range = [
+            iv for iv in intervals
+            if (target_s - tolerance_s) <= iv <= (target_s + tolerance_s)
         ]
-        
-        for i, ev in enumerate(simultaneous_events[:5], 1):
-            evidence.append(
-                f"  Event {i}: {datetime.fromtimestamp(ev['timestamp'], tz=timezone.utc)} "
-                f"| Gap: {ev['time_diff']:.3f}s | MNC {ev['network1']} ↔ MNC {ev['network2']}"
+        if len(in_range) < self.min_obs:
+            return []
+
+        mean_s = statistics.mean(in_range)
+        sd_ms  = (statistics.stdev(in_range) * 1000.0
+                  if len(in_range) > 1 else 0.0)
+        machine_precision = sd_ms < self.sd_threshold_ms
+
+        carriers: Dict[str, int] = {}
+        for r in releases:
+            carriers[r["mnc"]] = carriers.get(r["mnc"], 0) + 1
+        multi_carrier = len(carriers) > 1
+
+        msg = (
+            f"Metronomic RRCConnectionRelease cycle detected: "
+            f"{mean_s:.3f}s mean, SD {sd_ms:.1f}ms "
+            f"({len(in_range)} matching / {len(intervals)} total intervals). "
+            f"Signature: {label}. "
+            f"Machine-precision: {'YES' if machine_precision else 'NO'} "
+            f"(threshold {self.sd_threshold_ms}ms SD). "
+            f"3GPP TS 36.331 §5.3.8. YAICD P14 = 1.5 (Ziayi et al. 2021)."
+        )
+        if multi_carrier:
+            msg += (
+                f" Cross-carrier: {dict(carriers)} — "
+                f"simultaneous multi-carrier cycle confirms "
+                f"Harris 4-CH Multi-Xmit architecture."
             )
-        
-        if len(simultaneous_events) > 5:
-            evidence.append(f"  ... and {len(simultaneous_events) - 5} more")
-        
-        return {
-            'detector': 'RRC Periodicity Detector (Cross-Network Correlation)',
-            'title': 'Cross-Network Simultaneity — Single Rogue Transmitter Confirmed',
-            'severity': 'CRITICAL',
-            'confidence': 'CONFIRMED',
-            'confidence_score': 1.0,
-            'technique': 'Cross-Carrier Metronomic Simultaneity',
-            'spec_reference': 'Forensic cross-correlation analysis',
-            'hardware_hint': 'Single rogue eNodeB targeting multiple carriers',
-            'description': (
-                f'Detected {len(simultaneous_events)} instances of simultaneous RRCConnectionRelease '
-                f'events across independent mobile networks (MNC {networks[0]} and MNC {networks[1]}). '
-                f'Events occurred within {simultaneity_threshold}s of each other, including '
-                f'{sum(1 for e in simultaneous_events if e["time_diff"] < 0.1)} events with '
-                f'<100ms gaps.\n\n'
-                f'This simultaneity is physically impossible for legitimate network infrastructure — '
-                f'independent carriers do not coordinate RRC timers. This confirms a single rogue '
-                f'transmitter is targeting both networks, eliminating any possibility of carrier '
-                f'misconfiguration.\n\n'
-                f'Legal significance: Neither Telstra nor Vodafone can attribute these findings to '
-                f'their own infrastructure. This establishes geographic targeting of the location, '
-                f'not network-specific attack.'
+
+        return [{
+            "type":               "rrc_periodicity",
+            "finding_type":       "rrc_periodicity",
+            "detector":           self.name,
+            "severity":           "CRITICAL" if machine_precision else "HIGH",
+            "confirmed":          True,
+            "label":              label,
+            "profile_hint":       profile_hint,
+            "yaicd_param":        "P14_t3212_anomaly",
+            "cycle_seconds":      round(mean_s, 3),
+            "mean_interval_s":    round(mean_s, 3),
+            "std_dev_ms":         round(sd_ms, 1),
+            "matching_intervals": len(in_range),
+            "total_intervals":    len(intervals),
+            "total_releases":     len(releases),
+            "machine_precision":  machine_precision,
+            "multi_carrier":      multi_carrier,
+            "carriers":           carriers,
+            "message":            msg,
+        }]
+
+    def _check_tight_sd(
+        self,
+        intervals: List[float],
+        releases: List[Dict],
+    ) -> List[Dict]:
+        """Flag any tight-SD cluster not already caught by specific checks."""
+        if len(intervals) < self.min_obs:
+            return []
+
+        mean_s = statistics.mean(intervals)
+        sd_ms  = (statistics.stdev(intervals) * 1000.0
+                  if len(intervals) > 1 else 9999.0)
+
+        # Skip if already matched by named cycles
+        if (abs(mean_s - self.cycle_s)    <= self.tolerance_s or
+                abs(mean_s - self.harris_t1_s) <= self.harris_t1_tol):
+            return []
+
+        if sd_ms >= self.sd_threshold_ms:
+            return []
+
+        return [{
+            "type":             "rrc_periodicity",
+            "finding_type":     "rrc_periodicity",
+            "detector":         self.name,
+            "severity":         "HIGH",
+            "confirmed":        True,
+            "label":            f"Unknown metronomic cycle ({mean_s:.1f}s)",
+            "profile_hint":     "commercial_unknown",
+            "yaicd_param":      "P14_t3212_anomaly",
+            "cycle_seconds":    round(mean_s, 3),
+            "mean_interval_s":  round(mean_s, 3),
+            "std_dev_ms":       round(sd_ms, 1),
+            "total_releases":   len(releases),
+            "machine_precision": True,
+            "message": (
+                f"Unknown metronomic RRCConnectionRelease: "
+                f"{mean_s:.3f}s mean, SD {sd_ms:.1f}ms "
+                f"across {len(intervals)} intervals. "
+                f"SD < {self.sd_threshold_ms}ms = machine-precision. "
+                f"Does not match srsRAN ({self.cycle_s}s) "
+                f"or Harris T1 ({self.harris_t1_s}s). "
+                f"Novel hardware or modified firmware. "
+                f"YAICD P14 = 1.5 (Ziayi et al. 2021)."
             ),
-            'evidence': evidence,
-            'recommended_action': (
-                '1. This is primary evidence of single rogue infrastructure.\n'
-                '2. Include in all regulatory submissions (ACMA, AFP, TIO).\n'
-                '3. Proves attack is location-targeted, not network-specific.\n'
-                '4. Eliminates carrier fault explanations.\n'
-                '5. Submit to both carriers as proof of third-party interference.'
-            ),
-            'simultaneous_events': simultaneous_events,
-            'timestamp': datetime.now(tz=timezone.utc).isoformat(),
-        }
+        }]
+
+    # -----------------------------------------------------------------------
+
+    def _extract_releases(self, events: List[Any]) -> List[Dict]:
+        releases = []
+        for e in events:
+            # Normalise event type
+            etype = ""
+            for key in ("event_type", "type", "msg_type",
+                        "message_type", "rrc_message"):
+                v = self._get(e, key)
+                if v:
+                    etype = re.sub(r"[\-_\s]", "",
+                                   str(v).lower().replace("r8", "")
+                                                 .replace("r9", ""))
+                    break
+            if etype not in self._RELEASE_NAMES:
+                continue
+
+            ts = self._get_ts(e)
+            if ts is None:
+                continue
+
+            releases.append({
+                "ts":  ts,
+                "cid": str(self._get(e, "cell_id", "cid", "cellId") or "?"),
+                "mnc": str(self._get(e, "mnc", "network_code") or "?"),
+            })
+        return releases
+
+    @staticmethod
+    def _get(obj: Any, *keys: str) -> Optional[Any]:
+        for key in keys:
+            if isinstance(obj, dict):
+                if key in obj:
+                    return obj[key]
+            else:
+                v = getattr(obj, key, None)
+                if v is not None:
+                    return v
+        return None
+
+    def _get_ts(self, event: Any) -> Optional[float]:
+        for key in ("timestamp", "ts", "time", "epoch",
+                    "frame_time", "packet_time", "sniff_time"):
+            val = self._get(event, key)
+            if val is None:
+                continue
+            try:
+                if isinstance(val, (int, float)):
+                    f = float(val)
+                    if 1.58e9 < f < 2.2e9:
+                        return f
+                else:
+                    s = str(val).strip()
+                    for fmt in (
+                        "%Y-%m-%dT%H:%M:%S.%f%z",
+                        "%Y-%m-%dT%H:%M:%S%z",
+                        "%Y-%m-%d %H:%M:%S.%f%z",
+                        "%Y-%m-%d %H:%M:%S.%f",
+                        "%Y-%m-%d %H:%M:%S",
+                    ):
+                        try:
+                            dt = datetime.strptime(s[:26], fmt[:len(fmt)])
+                            ts = dt.timestamp()
+                            if 1.58e9 < ts < 2.2e9:
+                                return ts
+                        except (ValueError, OverflowError):
+                            pass
+            except (ValueError, TypeError, OSError):
+                pass
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Late import to avoid circular at module level
+import re

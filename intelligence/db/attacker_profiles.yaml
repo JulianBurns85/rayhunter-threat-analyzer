@@ -1,0 +1,247 @@
+# =============================================================================
+# Attacker Profiles — IMSI Catcher Hardware Discriminator Database
+# =============================================================================
+# File:    intelligence/db/attacker_profiles.yaml
+#
+# Used by: intelligence/hardware_fingerprint.py
+#
+# Each profile defines discriminator signals that increase or decrease
+# confidence for that hardware platform. The fingerprinter scores each
+# candidate and reports the top matches above confidence_threshold.
+#
+# Sources:
+#   Harris GCSD Price List Sep 2008 (leaked primary source)
+#   Harris Gemini 3.3 Quick Start Guide (leaked)
+#   Harris RayFish Controller R3.3.1 Release Notes (leaked)
+#   Harris iDEN 2.4 / Arrowhead 1.0.1 (leaked)
+#   Parks "Rise of the IMSI Catcher" Media Fields Journal 2016
+#   Bates "Stingray" Cato Institute PA-809 2017
+#   Ziayi et al. YAICD 2021
+#   Kareem IJRITCC 2023
+# =============================================================================
+
+profiles:
+
+  # ---------------------------------------------------------------------------
+  # Harris HailStorm / StingRay II — Commercial LTE IMSI Catcher
+  # Federal Customer only (post-2020: federal only; pre-2020: state/federal)
+  # ---------------------------------------------------------------------------
+  - id: "harris_commercial_lte_periodic"
+    name: "Harris HailStorm / StingRay II"
+    vendor: "Harris Corporation / L3Harris Technologies"
+    family: "StingRay"
+    confidence_base: 0.05
+    access_tier: "Federal government (AU: AFP / ASIO / ASD)"
+    cost_usd: 148000           # StingRay II base price, GCSD 2008
+    intercept_sw_usd: 50000    # Silent/Covert SW — Federal-only
+
+    discriminators:
+
+      # ── Strong positive signals ─────────────────────────────────────────
+      - signal: "CROSS_CARRIER"
+        description: "Simultaneous multi-carrier sync (Telstra + Vodafone)"
+        weight_harris_hailstorm: +0.40
+        weight_stingray2:        +0.35   # 4-CH Multi-Xmit confirmed
+        weight_srsran:           -0.40   # Single carrier only
+        weight_pki:              -0.20
+
+      - signal: "ZERO_EEA0"
+        description: "Zero EEA0 null-cipher events across capture span"
+        weight_harris_hailstorm: +0.35
+        weight_stingray2:        +0.30
+        weight_srsran:           -0.50   # srsRAN always produces EEA0
+        weight_pki:              -0.30
+        note: >
+          Kareem (2023): EEA0 absence is the definitive transparent proxy
+          discriminator. Harris RayFish Silent/Covert mode only.
+
+      - signal: "METRONOMIC_210S"
+        description: "RRCConnectionRelease cycle 210.2s SD<200ms"
+        weight_harris_hailstorm: +0.30
+        weight_srsran:           +0.25   # Also srsRAN default
+        weight_stingray2:        +0.20
+        weight_pki:              +0.10
+        note: >
+          210.2s is srsRAN 23.04 default AND Harris RayFish scheduled
+          release interval. Requires cross-referencing with other signals
+          to distinguish srsRAN from Harris.
+
+      - signal: "METRONOMIC_610S"
+        description: "RRCConnectionRelease cycle 610.6s — Harris T1 signature"
+        weight_harris_hailstorm: +0.45
+        weight_stingray2:        +0.35
+        weight_srsran:           -0.30
+        note: >
+          Harris HailStorm T1 parameter documented in Gemini RayFish
+          Controller release notes. Not a default srsRAN value.
+
+      - signal: "MACHINE_PRECISION_SD"
+        description: "RRC interval SD < 200ms — automation confirmed"
+        weight_harris_hailstorm: +0.25
+        weight_stingray2:        +0.20
+        weight_srsran:           +0.15
+        weight_pki:              +0.05
+
+      - signal: "ROGUE_CID_137713195"
+        description: "CID 137713195 TAC=12385 MCC=505 MNC=01"
+        weight_harris_hailstorm: +0.30
+        weight_stingray2:        +0.25
+        note: "Confirmed rogue CID — Cranbourne East investigation"
+
+      - signal: "OFFBAND_EARFCN_16384"
+        description: "EARFCN 16384 — outside all 3GPP TS 36.101 band tables"
+        weight_harris_hailstorm: +0.20
+        weight_stingray2:        +0.20
+        weight_srsran:           +0.10
+
+      - signal: "IMEISV_HARVEST"
+        description: "IMEISV identity collection events (YAICD P7)"
+        weight_harris_hailstorm: +0.15
+        weight_stingray2:        +0.15
+        weight_srsran:           +0.10
+        weight_pki:              +0.10
+
+      # ── Persistence signals ──────────────────────────────────────────────
+      - signal: "PERSISTENCE"
+        description: "Capture span duration"
+        thresholds:
+          - days: 300
+            label: "harris-class federal"
+            weight_harris_hailstorm: +0.35
+            weight_criminal_actor:   -0.40
+          - days: 90
+            label: "professional"
+            weight_harris_hailstorm: +0.15
+            weight_amateur:          -0.20
+          - days: 5
+            label: "short-lived"
+            weight_criminal_actor:   +0.15
+            note: "SeaGlass impermanence signature"
+
+      # ── Negative signals (rule out Harris transparent proxy) ─────────────
+      - signal: "EEA0_PRESENT"
+        description: "EEA0 null-cipher events present"
+        weight_harris_hailstorm: -0.40
+        weight_stingray2:        -0.35
+        weight_srsran:           +0.35
+        weight_pki:              +0.25
+        note: >
+          Harris RayFish Silent/Covert mode never produces EEA0.
+          Presence strongly indicates srsRAN or cheap commercial hardware.
+
+      - signal: "FORCED_2G_DOWNGRADE"
+        description: "Device forced from 4G to 2G/GSM"
+        weight_harris_hailstorm: -0.45
+        weight_stingray2:        -0.40
+        weight_srsran:           +0.20
+        weight_cheap_commercial: +0.30
+
+  # ---------------------------------------------------------------------------
+  # Harris StingRay II — explicit 4-CH variant
+  # ---------------------------------------------------------------------------
+  - id: "harris_stingray2"
+    name: "Harris StingRay II"
+    vendor: "Harris Corporation"
+    family: "StingRay"
+    confidence_base: 0.05
+    cost_usd: 134952    # Parks (2016) corroboration; GCSD 2008: $148,000
+    discriminators:
+      - signal: "CROSS_CARRIER"
+        weight_stingray2: +0.35
+      - signal: "ZERO_EEA0"
+        weight_stingray2: +0.30
+      - signal: "MACHINE_PRECISION_SD"
+        weight_stingray2: +0.20
+
+  # ---------------------------------------------------------------------------
+  # srsRAN / OpenAirInterface — open-source software-defined LTE
+  # ---------------------------------------------------------------------------
+  - id: "srsran_automated"
+    name: "srsRAN / OpenAirInterface"
+    vendor: "Open Source (SRS, OAI)"
+    family: "SDR"
+    confidence_base: 0.05
+    cost_usd: 500       # RTL-SDR / HackRF hardware cost
+
+    discriminators:
+      - signal: "EEA0_PRESENT"
+        description: "EEA0 always present in srsRAN MitM mode"
+        weight_srsran: +0.35
+      - signal: "METRONOMIC_210S"
+        weight_srsran: +0.25
+      - signal: "FORCED_2G_DOWNGRADE"
+        weight_srsran: +0.20
+      - signal: "CROSS_CARRIER"
+        weight_srsran: -0.40   # srsRAN = single carrier
+      - signal: "ZERO_EEA0"
+        weight_srsran: -0.50   # Contradicts srsRAN MitM mode
+      - signal: "PERSISTENCE"
+        thresholds:
+          - days: 90
+            weight_srsran: -0.30   # Impractical for amateur long-term
+
+  # ---------------------------------------------------------------------------
+  # PKI 1625 / Generic cheap commercial IMSI catcher
+  # ---------------------------------------------------------------------------
+  - id: "cheap_commercial"
+    name: "PKI 1625 / Generic Commercial"
+    vendor: "PKI Electronic / Various"
+    family: "Cheap Commercial"
+    confidence_base: 0.05
+    cost_usd: 30000
+
+    discriminators:
+      - signal: "EEA0_PRESENT"
+        weight_pki: +0.25
+      - signal: "CROSS_CARRIER"
+        weight_pki: -0.20
+      - signal: "ZERO_EEA0"
+        weight_pki: -0.30
+      - signal: "METRONOMIC_610S"
+        weight_pki: -0.30
+
+  # ---------------------------------------------------------------------------
+  # Amateur experimenter (research / education)
+  # ---------------------------------------------------------------------------
+  - id: "amateur_experimenter"
+    name: "Amateur / Research SDR"
+    vendor: "Various (YateBTS / OpenBTS / LimeSDR)"
+    family: "Amateur SDR"
+    confidence_base: 0.05
+    cost_usd: 500
+
+    discriminators:
+      - signal: "EEA0_PRESENT"
+        weight_amateur: +0.20
+      - signal: "FORCED_2G_DOWNGRADE"
+        weight_amateur: +0.25
+      - signal: "CROSS_CARRIER"
+        weight_amateur: -0.35
+      - signal: "PERSISTENCE"
+        thresholds:
+          - days: 30
+            weight_amateur: -0.30
+
+  # ---------------------------------------------------------------------------
+  # Criminal actor (non-state, non-amateur)
+  # ---------------------------------------------------------------------------
+  - id: "criminal_actor"
+    name: "Criminal Actor"
+    vendor: "Unknown"
+    family: "Criminal"
+    confidence_base: 0.02
+
+    discriminators:
+      - signal: "PERSISTENCE"
+        thresholds:
+          - days: 5
+            label: "short-lived"
+            weight_criminal_actor: +0.15
+      - signal: "CROSS_CARRIER"
+        weight_criminal_actor: -0.30
+      - signal: "ZERO_EEA0"
+        weight_criminal_actor: -0.25
+      - signal: "PERSISTENCE"
+        thresholds:
+          - days: 300
+            weight_criminal_actor: -0.50

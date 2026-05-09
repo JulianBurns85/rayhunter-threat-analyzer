@@ -56,10 +56,6 @@ diagnose.py
 python_check_cells.py
 check_cells.py
 
-# Database
-*.db
-*.sqlite
-intelligence/db/
 
 # Sensitive
 config_local.yaml

@@ -1,52 +1,80 @@
 #!/usr/bin/env python3
 """
-Rayhunter Threat Analyzer
-=========================
-Analyzes Rayhunter output files (NDJSON, PCAP, QMDL) for cellular surveillance
-threats, IMSI catchers, rogue towers, null-cipher attacks, and related anomalies.
+Rayhunter Threat Analyzer v2.2
+===============================
+Analyses Rayhunter output files (NDJSON, PCAP, QMDL) for cellular
+surveillance threats: IMSI catchers, rogue towers, null-cipher attacks,
+metronomic timing signatures, and cross-carrier anomalies.
+
+Produces terminal output, JSON report, and optional HTML report.
 
 Usage:
     python main.py --file capture.ndjson
-    python main.py --dir /path/to/rayhunter/output
-    python main.py --file capture.pcap --file capture2.ndjson
-    python main.py --dir ./captures --output report.json --format json
+    python main.py --dir C:\\RH\\captures --output report.json
+    python main.py --dir C:\\RH\\captures --html --manifest --verbose
+    python main.py --dir C:\\RH\\captures --mnc 003   # Vodafone AU
+
+v2.2 changes:
+    - HeuristicScorerDetector wired in (runs after all primary detectors)
+    - RRCPeriodicityDetector added (detects 210.2s / 610.6s cycles)
+    - YAICD formal score block printed to terminal
+    - heuristic_analysis injected into JSON report output
 """
 
 import argparse
-import sys
-import os
 import json
+import sys
 import time
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
+# -- Parsers ------------------------------------------------------------------
 from parsers.ndjson_parser import NdjsonParser
-from parsers.pcap_parser import PcapParser
-from parsers.qmdl_parser import QmdlParser
-from detectors.identity_harvest import IdentityHarvestDetector
-from detectors.cipher_downgrade import CipherDowngradeDetector
-from detectors.rogue_tower import RogueTowerDetector
-from detectors.handover_inject import HandoverInjectDetector
-from detectors.proximity_track import ProximityTrackDetector
-from detectors.paging_anomaly import PagingAnomalyDetector
-from detectors.earfcn_anomaly import EarfcnAnomalyDetector
+from parsers.pcap_parser    import PcapParser
+from parsers.qmdl_parser    import QmdlParser
+
+# -- Primary detectors --------------------------------------------------------
+from detectors.identity_harvest  import IdentityHarvestDetector
+from detectors.cipher_downgrade  import CipherDowngradeDetector
+from detectors.rogue_tower       import RogueTowerDetector
+from detectors.handover_inject   import HandoverInjectDetector
+from detectors.proximity_track   import ProximityTrackDetector
+from detectors.paging_anomaly    import PagingAnomalyDetector
+from detectors.earfcn_anomaly    import EarfcnAnomalyDetector
+
+# -- RRC periodicity (210.2s / 610.6s fingerprint) ---------------------------
+try:
+    from detectors.rrc_periodicity import RRCPeriodicityDetector
+    _HAS_RRC = True
+except ImportError:
+    _HAS_RRC = False
+    print(
+        "[WARN] detectors/rrc_periodicity.py not found — "
+        "RRC periodicity detection disabled. "
+        "Copy rrc_periodicity.py to detectors/ to enable "
+        "the 210.2s / 610.6s Harris fingerprint detector."
+    )
+
+# -- Post-processing ----------------------------------------------------------
+from detectors.heuristic_scorer import HeuristicScorerDetector
+
+# -- Intelligence / reporting -------------------------------------------------
 from intelligence.hardware_fingerprint import HardwareFingerprinter
-from reporter import ThreatReporter
+from reporter                          import ThreatReporter
 import config_loader
 
 
-BANNER = """
+BANNER = r"""
 ╔══════════════════════════════════════════════════════════════╗
-║          RAYHUNTER THREAT ANALYZER  v1.0                     ║
-║   Cellular Surveillance Detection & Forensic Analysis        ║
-║   Targets: NDJSON · PCAP · QMDL                              ║
+║  RAYHUNTER THREAT ANALYZER v2.2                              ║
+║  Cellular Surveillance Detection & Forensic Analysis         ║
+║  Targets: NDJSON · PCAP · QMDL                               ║
+║  10-Heuristic Framework + YAICD Scoring (Ziayi et al. 2021) ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 
-
-# Directories to skip during C:\ recursive scan
 SKIP_DIRS = {
-    "windows", "system32", "syswow64", "winsxs", "winside",
+    "windows", "system32", "syswow64", "winsxs",
     "program files", "program files (x86)", "programdata",
     "appdata", "packages", "windowsapps", "$recycle.bin",
     "system volume information", "recovery", "boot",
@@ -54,22 +82,23 @@ SKIP_DIRS = {
 }
 
 
-def collect_files(paths: List[str], directory: str) -> dict:
-    """Collect and categorise input files by type."""
-    files = {"ndjson": [], "pcap": [], "qmdl": []}
+# ---------------------------------------------------------------------------
+# File collection
+# ---------------------------------------------------------------------------
 
+def collect_files(paths: List[str], directory: str) -> Dict[str, List[str]]:
+    files: Dict[str, List[str]] = {"ndjson": [], "pcap": [], "qmdl": []}
     all_paths = list(paths or [])
+
     if directory:
         dir_path = Path(directory)
         if not dir_path.exists():
             print(f"[ERROR] Directory not found: {directory}")
             sys.exit(1)
-
-        print(f"  Scanning {directory} (skipping system directories)...")
+        print(f"  Scanning: {directory}")
         for ext in ("*.ndjson", "*.pcap", "*.pcapng", "*.qmdl", "*.bin"):
             for p in dir_path.rglob(ext):
                 try:
-                    # Skip system/application directories
                     parts_lower = {part.lower() for part in p.parts}
                     if parts_lower & SKIP_DIRS:
                         continue
@@ -90,54 +119,48 @@ def collect_files(paths: List[str], directory: str) -> dict:
         elif ext in (".qmdl", ".bin"):
             files["qmdl"].append(str(p))
         else:
-            # Try to detect by content
             print(f"[WARN] Unknown extension for {p.name}, skipping.")
 
     return files
 
 
-def run_analysis(files: dict, cfg: dict, verbose: bool) -> dict:
-    """Run all parsers and detectors, return aggregated events + findings."""
-    all_events = []
+# ---------------------------------------------------------------------------
+# Analysis pipeline
+# ---------------------------------------------------------------------------
 
-    # ── Parse NDJSON ──────────────────────────────────────────────────
-    if files["ndjson"]:
-        parser = NdjsonParser(cfg)
-        for f in files["ndjson"]:
-            if verbose:
-                print(f"  [NDJSON] Parsing {f}")
-            events = parser.parse(f)
-            print(f"    → {len(events)} events extracted from {Path(f).name}")
-            all_events.extend(events)
+def run_analysis(files: Dict[str, List[str]],
+                 cfg: dict,
+                 verbose: bool) -> dict:
+    all_events: list = []
 
-    # ── Parse PCAP ────────────────────────────────────────────────────
-    if files["pcap"]:
-        parser = PcapParser(cfg)
-        for f in files["pcap"]:
+    # -- Parse ----------------------------------------------------------------
+    parsers = [
+        ("NDJSON", NdjsonParser(cfg),  files["ndjson"]),
+        ("PCAP",   PcapParser(cfg),    files["pcap"]),
+        ("QMDL",   QmdlParser(cfg),    files["qmdl"]),
+    ]
+    for label, parser, flist in parsers:
+        for f in flist:
             if verbose:
-                print(f"  [PCAP] Parsing {f}")
-            events = parser.parse(f)
-            print(f"    → {len(events)} events extracted from {Path(f).name}")
-            all_events.extend(events)
-
-    # ── Parse QMDL ────────────────────────────────────────────────────
-    if files["qmdl"]:
-        parser = QmdlParser(cfg)
-        for f in files["qmdl"]:
-            if verbose:
-                print(f"  [QMDL] Parsing {f}")
-            events = parser.parse(f)
-            print(f"    → {len(events)} events extracted from {Path(f).name}")
-            all_events.extend(events)
+                print(f"  [{label}] Parsing {f}")
+            try:
+                events = parser.parse(f)
+                print(f"  -> {len(events):,} events from {Path(f).name}")
+                all_events.extend(events)
+            except Exception as exc:
+                print(f"  [WARN] Parse error in {Path(f).name}: {exc}")
 
     if not all_events:
         print("\n[WARN] No events extracted. Check file formats and paths.")
-        return {"events": [], "findings": []}
+        return {
+            "events": [], "findings": [],
+            "hardware": [], "heuristics": None,
+        }
 
-    print(f"\n  Total events: {len(all_events)}")
+    print(f"\n  Total events: {len(all_events):,}")
 
-    # ── Run Detectors ─────────────────────────────────────────────────
-    detectors = [
+    # -- Primary detectors ----------------------------------------------------
+    primary_detectors = [
         IdentityHarvestDetector(cfg),
         CipherDowngradeDetector(cfg),
         RogueTowerDetector(cfg),
@@ -146,91 +169,105 @@ def run_analysis(files: dict, cfg: dict, verbose: bool) -> dict:
         PagingAnomalyDetector(cfg),
         EarfcnAnomalyDetector(cfg),
     ]
+    if _HAS_RRC:
+        primary_detectors.append(RRCPeriodicityDetector(cfg))
 
-    all_findings = []
-    for detector in detectors:
+    all_findings: list = []
+    for detector in primary_detectors:
         if verbose:
             print(f"  [DETECT] Running {detector.name}...")
-        findings = detector.analyze(all_events)
-        if findings:
-            print(f"    → {len(findings)} finding(s): {detector.name}")
-        all_findings.extend(findings)
+        try:
+            findings = detector.analyze(all_events)
+            if findings:
+                print(f"  -> {len(findings)} finding(s): {detector.name}")
+            all_findings.extend(findings)
+        except Exception as exc:
+            print(f"  [WARN] {detector.name} error: {exc}")
 
-    # ── Hardware Fingerprinting ───────────────────────────────────────
-    # v2.1: pass cfg for persistence (506 days) and T1 signature (610.6s)
-    fingerprinter = HardwareFingerprinter(
-        cfg.get("intelligence", {}).get("db_path", "intelligence/db"),
-        cfg=cfg,
-    )
-    fingerprints = fingerprinter.analyze(all_events, all_findings)
-    if fingerprints:
-        print(f"  [HWFP] {len(fingerprints)} hardware candidate(s) identified")
+    # -- Hardware fingerprinting ----------------------------------------------
+    try:
+        fp = HardwareFingerprinter(
+            cfg.get("intelligence", {}).get("db_path", "intelligence/db"),
+            cfg=cfg,
+        )
+        fingerprints = fp.analyze(all_events, all_findings)
+        if fingerprints:
+            print(f"  [HWFP] {len(fingerprints)} hardware candidate(s) identified")
+    except Exception as exc:
+        print(f"  [WARN] HardwareFingerprinter error: {exc}")
+        fingerprints = []
+
+    # -- Heuristic scorer (post-processing) -----------------------------------
+    print()
+    print("  Running 10-Heuristic IMSI Catcher Detection Framework...")
+    try:
+        hscorer = HeuristicScorerDetector(cfg)
+        heuristic_result = hscorer.analyze(all_events, all_findings)
+        print(f"  [HEURISTIC] {heuristic_result.summary}")
+
+        if verbose:
+            for h in heuristic_result.heuristics:
+                icon = {
+                    "CONFIRMED":      "[+]",
+                    "PARTIAL":        "[~]",
+                    "NOT_DETECTED":   "[ ]",
+                    "NOT_APPLICABLE": "[N/A]",
+                }.get(h.status, "[?]")
+                print(f"    {icon} {h.heuristic_id} {h.label}: {h.status}")
+
+    except Exception as exc:
+        print(f"  [WARN] HeuristicScorerDetector error: {exc}")
+        heuristic_result = None
 
     return {
-        "events": all_events,
-        "findings": all_findings,
-        "hardware": fingerprints,
+        "events":     all_events,
+        "findings":   all_findings,
+        "hardware":   fingerprints,
+        "heuristics": heuristic_result,
     }
 
 
-def main():
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main() -> None:
     print(BANNER)
 
-    parser = argparse.ArgumentParser(
-        description="Rayhunter Threat Analyzer — cellular surveillance detection"
+    ap = argparse.ArgumentParser(
+        description="Rayhunter Threat Analyzer v2.2"
     )
-    parser.add_argument(
-        "--file", "-f",
-        action="append",
-        metavar="FILE",
-        help="Input file (NDJSON, PCAP, or QMDL). Repeatable.",
-    )
-    parser.add_argument(
-        "--dir", "-d",
-        metavar="DIR",
-        help="Directory to scan recursively for all supported files.",
-    )
-    parser.add_argument(
-        "--output", "-o",
-        metavar="FILE",
-        help="Write JSON report to file (default: print to terminal).",
-    )
-    parser.add_argument(
-        "--format",
-        choices=["terminal", "json", "both"],
-        default="both",
-        help="Output format (default: both).",
-    )
-    parser.add_argument(
-        "--config", "-c",
-        metavar="FILE",
-        default="config.yaml",
-        help="Config file path (default: config.yaml).",
-    )
-    parser.add_argument(
-        "--mcc", type=str, help="Override MCC (e.g. 505)"
-    )
-    parser.add_argument(
-        "--mnc", type=str, help="Override MNC (e.g. 001 for Telstra, 003 for Vodafone AU)"
-    )
-    parser.add_argument(
-        "--no-opencellid",
-        action="store_true",
-        help="Disable OpenCelliD lookups (offline mode).",
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Verbose output.",
-    )
-
-    args = parser.parse_args()
+    ap.add_argument("--file", "-f", action="append", metavar="FILE",
+                    help="Input file. Repeatable.")
+    ap.add_argument("--dir",  "-d", metavar="DIR",
+                    help="Directory to scan recursively.")
+    ap.add_argument("--output", "-o", metavar="FILE",
+                    help="Write JSON report to FILE.")
+    ap.add_argument("--format",
+                    choices=["terminal", "json", "both"], default="both",
+                    help="Output format (default: both).")
+    ap.add_argument("--config", "-c", metavar="FILE", default="config.yaml",
+                    help="Config file (default: config.yaml).")
+    ap.add_argument("--mcc",  type=str, help="Override MCC (e.g. 505).")
+    ap.add_argument("--mnc",  type=str,
+                    help="Override MNC (001=Telstra AU, 003=Vodafone AU).")
+    ap.add_argument("--no-opencellid", action="store_true",
+                    help="Disable OpenCelliD lookups (offline mode).")
+    ap.add_argument("--manifest", action="store_true",
+                    help="Generate SHA-256 forensic file manifest.")
+    ap.add_argument("--html", action="store_true",
+                    help="Generate interactive HTML report.")
+    ap.add_argument("--timeline", action="store_true",
+                    help="Generate cross-session event timeline.")
+    ap.add_argument("--verbose", "-v", action="store_true",
+                    help="Verbose — show per-heuristic status.")
+    args = ap.parse_args()
 
     if not args.file and not args.dir:
-        parser.print_help()
+        ap.print_help()
         sys.exit(1)
 
-    # ── Load config ───────────────────────────────────────────────────
+    # Load config
     cfg = config_loader.load(args.config)
     if args.mcc:
         cfg["network"]["mcc"] = args.mcc
@@ -239,332 +276,118 @@ def main():
     if args.no_opencellid:
         cfg["opencellid"]["enabled"] = False
 
-    print(f"  Network: MCC={cfg['network']['mcc']} MNC={cfg['network']['mnc']}")
-    print(f"  OpenCelliD: {'enabled' if cfg['opencellid']['enabled'] else 'OFFLINE'}")
+    print(f"  Network:    MCC={cfg['network']['mcc']} "
+          f"MNC={cfg['network']['mnc']}")
+    print(f"  OpenCelliD: "
+          f"{'enabled' if cfg['opencellid']['enabled'] else 'OFFLINE'}")
+    print(f"  RRC Detector: "
+          f"{'enabled (210.2s + 610.6s)' if _HAS_RRC else 'MISSING'}")
     print()
 
-    # ── Collect files ─────────────────────────────────────────────────
-    files = collect_files(args.file, args.dir)
+    # Collect files
+    files = collect_files(args.file or [], args.dir or "")
     total = sum(len(v) for v in files.values())
     if total == 0:
         print("[ERROR] No valid files found.")
         sys.exit(1)
 
-    print(f"Files queued: {files['ndjson']} NDJSON | "
-          f"{len(files['pcap'])} PCAP | {len(files['qmdl'])} QMDL\n")
-    print("─" * 62)
-    print("PHASE 1 — PARSING")
-    print("─" * 62)
+    print(f"  Files queued: "
+          f"{len(files['ndjson'])} NDJSON | "
+          f"{len(files['pcap'])} PCAP | "
+          f"{len(files['qmdl'])} QMDL\n")
 
-    start = time.time()
+    print("-" * 64)
+    print("PHASE 1 -- PARSING & DETECTION")
+    print("-" * 64)
+
+    start   = time.time()
     results = run_analysis(files, cfg, args.verbose)
     elapsed = time.time() - start
 
     print()
-    print("─" * 62)
-    print("PHASE 2 — REPORTING")
-    print("─" * 62)
+    print("-" * 64)
+    print("PHASE 2 -- REPORTING")
+    print("-" * 64)
 
     reporter = ThreatReporter(cfg)
-    report = reporter.build_report(results, elapsed)
+    report   = reporter.build_report(results, elapsed)
 
+    # Inject heuristic result into JSON report
+    hr = results.get("heuristics")
+    if hr:
+        report["heuristic_analysis"] = hr.to_dict()
+
+    # Terminal output
     if args.format in ("terminal", "both"):
         reporter.print_terminal(report)
 
+        # YAICD summary block
+        if hr:
+            confirmed = [h for h in hr.heuristics if h.status == "CONFIRMED"]
+            partial   = [h for h in hr.heuristics if h.status == "PARTIAL"]
+            print()
+            print("=" * 64)
+            print("YAICD FORMAL DETECTION SCORE (Ziayi et al. 2021)")
+            print("=" * 64)
+            print(f"  Confirmed heuristics : {hr.confirmed_count}")
+            print(f"  Partial heuristics   : {hr.partial_count}")
+            print(f"  YAICD score          : {hr.yaicd_formal_score:.2f} "
+                  f"(threshold: {2.6})")
+            print(f"  Triggered params     : "
+                  f"{', '.join(hr.triggered_params) or 'none'}")
+            verdict = (
+                "*** FORMAL POSITIVE DETECTION ***"
+                if hr.yaicd_detected else "Below threshold"
+            )
+            print(f"  Verdict              : {verdict}")
+            print(f"  Severity             : {hr.severity}")
+            if confirmed:
+                print()
+                print("  Confirmed indicators:")
+                for h in confirmed:
+                    print(f"    [+] {h.heuristic_id} {h.label}")
+            if partial:
+                print("  Partial indicators:")
+                for h in partial:
+                    print(f"    [~] {h.heuristic_id} {h.label}")
+            print("=" * 64)
+
+    # JSON output
     if args.format in ("json", "both") or args.output:
         json_out = json.dumps(report, indent=2, default=str)
         if args.output:
-            Path(args.output).write_text(json_out)
-            print(f"\n[✓] JSON report saved to: {args.output}")
+            Path(args.output).write_text(json_out, encoding="utf-8")
+            print(f"\n[OK] JSON report saved to: {args.output}")
         else:
             out_path = f"rayhunter_report_{int(time.time())}.json"
-            Path(out_path).write_text(json_out)
-            print(f"\n[✓] JSON report saved to: {out_path}")
+            Path(out_path).write_text(json_out, encoding="utf-8")
+            print(f"\n[OK] JSON report saved to: {out_path}")
 
+    # Optional HTML report
+    if args.html:
+        try:
+            from html_reporter_v2 import HTMLReporterV2
+            html_path = (
+                Path(args.output).with_suffix(".html")
+                if args.output
+                else Path(f"rayhunter_report_{int(time.time())}.html")
+            )
+            HTMLReporterV2(cfg).generate(report, str(html_path))
+            print(f"[OK] HTML report saved to: {html_path}")
+        except ImportError:
+            print("[WARN] html_reporter_v2.py not found — HTML skipped.")
 
-if __name__ == "__main__":
-    main()#!/usr/bin/env python3
-"""
-Rayhunter Threat Analyzer
-=========================
-Analyzes Rayhunter output files (NDJSON, PCAP, QMDL) for cellular surveillance
-threats, IMSI catchers, rogue towers, null-cipher attacks, and related anomalies.
-
-Usage:
-    python main.py --file capture.ndjson
-    python main.py --dir /path/to/rayhunter/output
-    python main.py --file capture.pcap --file capture2.ndjson
-    python main.py --dir ./captures --output report.json --format json
-"""
-
-import argparse
-import sys
-import os
-import json
-import time
-from pathlib import Path
-from typing import List
-
-from parsers.ndjson_parser import NdjsonParser
-from parsers.pcap_parser import PcapParser
-from parsers.qmdl_parser import QmdlParser
-from detectors.identity_harvest import IdentityHarvestDetector
-from detectors.cipher_downgrade import CipherDowngradeDetector
-from detectors.rogue_tower import RogueTowerDetector
-from detectors.handover_inject import HandoverInjectDetector
-from detectors.proximity_track import ProximityTrackDetector
-from detectors.paging_anomaly import PagingAnomalyDetector
-from detectors.earfcn_anomaly import EarfcnAnomalyDetector
-from intelligence.hardware_fingerprint import HardwareFingerprinter
-from reporter import ThreatReporter
-import config_loader
-
-
-BANNER = """
-╔══════════════════════════════════════════════════════════════╗
-║          RAYHUNTER THREAT ANALYZER  v1.0                     ║
-║   Cellular Surveillance Detection & Forensic Analysis        ║
-║   Targets: NDJSON · PCAP · QMDL                              ║
-╚══════════════════════════════════════════════════════════════╝
-"""
-
-
-# Directories to skip during C:\ recursive scan
-SKIP_DIRS = {
-    "windows", "system32", "syswow64", "winsxs", "winside",
-    "program files", "program files (x86)", "programdata",
-    "appdata", "packages", "windowsapps", "$recycle.bin",
-    "system volume information", "recovery", "boot",
-    "perflogs", "msocache", "intel", "amd", "nvidia",
-}
-
-
-def collect_files(paths: List[str], directory: str) -> dict:
-    """Collect and categorise input files by type."""
-    files = {"ndjson": [], "pcap": [], "qmdl": []}
-
-    all_paths = list(paths or [])
-    if directory:
-        dir_path = Path(directory)
-        if not dir_path.exists():
-            print(f"[ERROR] Directory not found: {directory}")
-            sys.exit(1)
-
-        print(f"  Scanning {directory} (skipping system directories)...")
-        for ext in ("*.ndjson", "*.pcap", "*.pcapng", "*.qmdl", "*.bin"):
-            for p in dir_path.rglob(ext):
-                try:
-                    # Skip system/application directories
-                    parts_lower = {part.lower() for part in p.parts}
-                    if parts_lower & SKIP_DIRS:
-                        continue
-                    all_paths.append(str(p))
-                except (PermissionError, OSError):
-                    continue
-
-    for path in all_paths:
-        p = Path(path)
-        if not p.exists():
-            print(f"[WARN] File not found, skipping: {path}")
-            continue
-        ext = p.suffix.lower()
-        if ext == ".ndjson":
-            files["ndjson"].append(str(p))
-        elif ext in (".pcap", ".pcapng"):
-            files["pcap"].append(str(p))
-        elif ext in (".qmdl", ".bin"):
-            files["qmdl"].append(str(p))
-        else:
-            # Try to detect by content
-            print(f"[WARN] Unknown extension for {p.name}, skipping.")
-
-    return files
-
-
-def run_analysis(files: dict, cfg: dict, verbose: bool) -> dict:
-    """Run all parsers and detectors, return aggregated events + findings."""
-    all_events = []
-
-    # ── Parse NDJSON ──────────────────────────────────────────────────
-    if files["ndjson"]:
-        parser = NdjsonParser(cfg)
-        for f in files["ndjson"]:
-            if verbose:
-                print(f"  [NDJSON] Parsing {f}")
-            events = parser.parse(f)
-            print(f"    → {len(events)} events extracted from {Path(f).name}")
-            all_events.extend(events)
-
-    # ── Parse PCAP ────────────────────────────────────────────────────
-    if files["pcap"]:
-        parser = PcapParser(cfg)
-        for f in files["pcap"]:
-            if verbose:
-                print(f"  [PCAP] Parsing {f}")
-            events = parser.parse(f)
-            print(f"    → {len(events)} events extracted from {Path(f).name}")
-            all_events.extend(events)
-
-    # ── Parse QMDL ────────────────────────────────────────────────────
-    if files["qmdl"]:
-        parser = QmdlParser(cfg)
-        for f in files["qmdl"]:
-            if verbose:
-                print(f"  [QMDL] Parsing {f}")
-            events = parser.parse(f)
-            print(f"    → {len(events)} events extracted from {Path(f).name}")
-            all_events.extend(events)
-
-    if not all_events:
-        print("\n[WARN] No events extracted. Check file formats and paths.")
-        return {"events": [], "findings": []}
-
-    print(f"\n  Total events: {len(all_events)}")
-
-    # ── Run Detectors ─────────────────────────────────────────────────
-    detectors = [
-        IdentityHarvestDetector(cfg),
-        CipherDowngradeDetector(cfg),
-        RogueTowerDetector(cfg),
-        HandoverInjectDetector(cfg),
-        ProximityTrackDetector(cfg),
-        PagingAnomalyDetector(cfg),
-        EarfcnAnomalyDetector(cfg),
-    ]
-
-    all_findings = []
-    for detector in detectors:
-        if verbose:
-            print(f"  [DETECT] Running {detector.name}...")
-        findings = detector.analyze(all_events)
-        if findings:
-            print(f"    → {len(findings)} finding(s): {detector.name}")
-        all_findings.extend(findings)
-
-    # ── Hardware Fingerprinting ───────────────────────────────────────
-    # v2.1: pass cfg for persistence (506 days) and T1 signature (610.6s)
-    fingerprinter = HardwareFingerprinter(
-        cfg.get("intelligence", {}).get("db_path", "intelligence/db"),
-        cfg=cfg,
-    )
-    fingerprints = fingerprinter.analyze(all_events, all_findings)
-    if fingerprints:
-        print(f"  [HWFP] {len(fingerprints)} hardware candidate(s) identified")
-
-    return {
-        "events": all_events,
-        "findings": all_findings,
-        "hardware": fingerprints,
-    }
-
-
-def main():
-    print(BANNER)
-
-    parser = argparse.ArgumentParser(
-        description="Rayhunter Threat Analyzer — cellular surveillance detection"
-    )
-    parser.add_argument(
-        "--file", "-f",
-        action="append",
-        metavar="FILE",
-        help="Input file (NDJSON, PCAP, or QMDL). Repeatable.",
-    )
-    parser.add_argument(
-        "--dir", "-d",
-        metavar="DIR",
-        help="Directory to scan recursively for all supported files.",
-    )
-    parser.add_argument(
-        "--output", "-o",
-        metavar="FILE",
-        help="Write JSON report to file (default: print to terminal).",
-    )
-    parser.add_argument(
-        "--format",
-        choices=["terminal", "json", "both"],
-        default="both",
-        help="Output format (default: both).",
-    )
-    parser.add_argument(
-        "--config", "-c",
-        metavar="FILE",
-        default="config.yaml",
-        help="Config file path (default: config.yaml).",
-    )
-    parser.add_argument(
-        "--mcc", type=str, help="Override MCC (e.g. 505)"
-    )
-    parser.add_argument(
-        "--mnc", type=str, help="Override MNC (e.g. 001 for Telstra, 003 for Vodafone AU)"
-    )
-    parser.add_argument(
-        "--no-opencellid",
-        action="store_true",
-        help="Disable OpenCelliD lookups (offline mode).",
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Verbose output.",
-    )
-
-    args = parser.parse_args()
-
-    if not args.file and not args.dir:
-        parser.print_help()
-        sys.exit(1)
-
-    # ── Load config ───────────────────────────────────────────────────
-    cfg = config_loader.load(args.config)
-    if args.mcc:
-        cfg["network"]["mcc"] = args.mcc
-    if args.mnc:
-        cfg["network"]["mnc"] = args.mnc
-    if args.no_opencellid:
-        cfg["opencellid"]["enabled"] = False
-
-    print(f"  Network: MCC={cfg['network']['mcc']} MNC={cfg['network']['mnc']}")
-    print(f"  OpenCelliD: {'enabled' if cfg['opencellid']['enabled'] else 'OFFLINE'}")
-    print()
-
-    # ── Collect files ─────────────────────────────────────────────────
-    files = collect_files(args.file, args.dir)
-    total = sum(len(v) for v in files.values())
-    if total == 0:
-        print("[ERROR] No valid files found.")
-        sys.exit(1)
-
-    print(f"Files queued: {files['ndjson']} NDJSON | "
-          f"{len(files['pcap'])} PCAP | {len(files['qmdl'])} QMDL\n")
-    print("─" * 62)
-    print("PHASE 1 — PARSING")
-    print("─" * 62)
-
-    start = time.time()
-    results = run_analysis(files, cfg, args.verbose)
-    elapsed = time.time() - start
-
-    print()
-    print("─" * 62)
-    print("PHASE 2 — REPORTING")
-    print("─" * 62)
-
-    reporter = ThreatReporter(cfg)
-    report = reporter.build_report(results, elapsed)
-
-    if args.format in ("terminal", "both"):
-        reporter.print_terminal(report)
-
-    if args.format in ("json", "both") or args.output:
-        json_out = json.dumps(report, indent=2, default=str)
-        if args.output:
-            Path(args.output).write_text(json_out)
-            print(f"\n[✓] JSON report saved to: {args.output}")
-        else:
-            out_path = f"rayhunter_report_{int(time.time())}.json"
-            Path(out_path).write_text(json_out)
-            print(f"\n[✓] JSON report saved to: {out_path}")
+    # Optional forensic manifest
+    if args.manifest:
+        try:
+            from manifest_generator import ManifestGenerator
+            manifest_files = (
+                files["ndjson"] + files["pcap"] + files["qmdl"]
+            )
+            ManifestGenerator(cfg).generate(manifest_files)
+            print("[OK] SHA-256 forensic manifest generated.")
+        except ImportError:
+            print("[WARN] manifest_generator.py not found — manifest skipped.")
 
 
 if __name__ == "__main__":

@@ -1,246 +1,92 @@
+# =============================================================================
 # Rayhunter Threat Analyzer — Configuration
-# ==========================================
-# Edit this file to match your investigation parameters.
-#
-# Fix history:
-#   v2.1 (9 May 2026): Corrected MNC for all Vodafone AU known_rogue_cells
-#   entries from 001 (Telstra) to 003 (Vodafone AU). Parser was defaulting
-#   all cells to the session-level MNC (001) regardless of broadcast PLMN.
-#   Added investigation_start_date for correct persistence calculation.
-#   Added T1 timer confirmed signature to thresholds_v2.
+# =============================================================================
+# v2.2 — added heuristic_scorer and rrc_periodicity blocks
 
 network:
   mcc: "505"          # Australia
-  mnc: "001"          # Telstra (use 003 for Vodafone AU)
+  mnc: "001"          # Telstra AU (use --mnc 003 for Vodafone AU)
+  mnc_telstra: "001"
+  mnc_vodafone: "003"
   country: "AU"
-  operator: "Telstra"
 
 opencellid:
-  enabled: false      # Set true and add your API key to enable rogue tower DB checks
-  api_key: ""         # Get free key at opencellid.org
-  cache_file: "cell_cache.json"
-  timeout_seconds: 5
+  enabled: false      # Set true and add api_key for live CID verification
+  api_key: ""
+  cache_days: 7
 
-thresholds:
-  # IMSI Catcher detection: flag if >N identity requests in window
-  identity_request_window_seconds: 120
-  identity_request_max_normal: 2
+intelligence:
+  db_path: "intelligence/db"
 
-  # EARFCN hopping: flag if cell changes EARFCN >N times in window
-  earfcn_change_window_seconds: 60
-  earfcn_change_max_normal: 3
+detection:
 
-  # Paging: flag if >N% of pages use IMSI (should be TMSI)
-  paging_imsi_ratio_threshold: 0.20
-
-  # Injected handover: flag if >N handovers occur without preceding MeasReport
-  handover_max_without_measreport: 2
-
-# Confirmed rogue cell IDs from your investigation.
-# Format: "<MCC>-<MNC>-<CELL_ID>": {notes: "..."}
-# These will be flagged as CONFIRMED ROGUE regardless of OpenCelliD status.
-#
-# FIX v2.1: Vodafone CIDs corrected to MNC=003.
-# Previous versions had all cells at MNC=001 (Telstra) due to parser bug
-# that inherited session-level MNC rather than reading per-cell PLMN.
-# All 8409xxx CIDs are Vodafone AU (TAC=30336, MNC=003).
-# All 137713xxx and 135836xxx CIDs are Telstra (TAC=12385, MNC=001).
-known_rogue_cells:
-  # ── Telstra (MNC=001, TAC=12385) ──────────────────────────────────
-  "505-01-137713195":
-    notes: "Primary Telstra rogue — persistent all sessions — CIRS-20260331-141 / ACMA ENQ-1851DVJH04"
-    first_seen: "2024-12-19"
-    tshark_verified: true
-  "505-01-137713175":
-    notes: "Telstra rogue cluster TAC=12385 — first seen 2026-05-07 12:29 UTC (19h pre-ACMA visit)"
-    first_seen: "2026-05-07"
-    tshark_verified: true
-  "505-01-137713155":
-    notes: "Telstra rogue cluster TAC=12385 — persistent all sessions"
-    first_seen: "2026-01-28"
-    tshark_verified: true
-  "505-01-137713165":
-    notes: "Telstra rogue cluster TAC=12385 — first seen 2026-05-08 10:07 UTC (during ACMA visit)"
-    first_seen: "2026-05-08"
-    tshark_verified: true
-  "505-01-135836191":
-    notes: "Telstra rogue TAC=12385 — 334 observations — CIRS-20260331-141"
-    first_seen: "2026-01-28"
-    tshark_verified: false
-
-  # ── Vodafone AU (MNC=003, TAC=30336) ──────────────────────────────
-  # FIX: These were incorrectly listed as MNC=001 in previous versions
-  "505-03-8409357":
-    notes: "Primary Vodafone rogue — persistent all sessions — cross-network confirmed"
-    first_seen: "2026-01-28"
-    tshark_verified: true
-  "505-03-8409387":
-    notes: "Vodafone rogue TAC=30336 — persistent all sessions — cross-network confirmed"
-    first_seen: "2026-01-28"
-    tshark_verified: true
-  "505-03-8409367":
-    notes: "Vodafone rogue TAC=30336 — first seen 2026-05-05 14:41 UTC"
-    first_seen: "2026-05-05"
-    tshark_verified: true
-  "505-03-8409397":
-    notes: "Vodafone rogue TAC=30336 — first seen 2026-05-05 14:47 UTC"
-    first_seen: "2026-05-05"
-    tshark_verified: true
-
-# Known anomalous EARFCNs documented in your investigation
-known_rogue_earfcns:
-  - 16384   # Outside all standard 3GPP TS 36.101 LTE band tables — confirmed anomalous
-
-# Hardware OUI prefixes for known attacker equipment
-ubiquiti_oui:
-  - "24:A4:3C"
-  - "FC:EC:DA"
-  - "78:8A:20"
-  - "B4:FB:E4"
-  - "00:27:22"
-
-hak5_oui:
-  - "00:13:37"
-
-output:
-  color: true
-  show_raw_evidence: true
-  max_evidence_lines: 20
-
-# ── v2.1 Detection Thresholds ──────────────────────────────────────────────
-thresholds_v2:
-
-  # Null cipher — any occurrence is CRITICAL
-  null_cipher_alert_threshold: 1
-
-  # RRC Periodicity — FIELD CONFIRMED (tshark-verified, CIRS-20260331-141)
-  # Phase 2 Telstra: 210.212s ±0.139s (333+ events)
-  # Phase 2 Vodafone: 40.553s ±0.327s (27 intervals)
-  rrc_periodicity_target_telstra_seconds: 210.2
-  rrc_periodicity_target_vodafone_seconds: 40.5
-  rrc_periodicity_variance_threshold: 0.5
-  rrc_periodicity_min_cycles: 10
-  rrc_periodicity_baseline_variance: 30.0  # Legitimate network StdDev >30s
-
-  # T1 Hold Timer — NEWLY CONFIRMED (9 May 2026, PCAPNG burst analysis)
-  # 610.6s ±0.55s across 5 events on both Telstra and Vodafone carriers
-  # Machine-precision shared parameter = Harris RayFish Controller signature
-  t1_hold_timer_confirmed_seconds: 610.6
-  t1_hold_timer_std_dev: 0.55
-  t1_hold_timer_sample_count: 5
-  t1_hold_timer_carriers_confirmed: ["505-01", "505-03"]
-  t1_hold_timer_note: >
-    T1 = 610.6s ±0.55s is machine-precision across both carriers.
-    Consistent shared value = shared RayFish Controller configuration.
-    This parameter was UNCHANGED by the post-ACMA reconfiguration.
-
-  # Marlin IMSI Exposure Ratio (Tucker et al. NDSS 2025)
-  marlin_legitimate_baseline: 0.03
-  marlin_elevated_threshold: 0.03
-  marlin_high_threshold: 0.10
-  marlin_critical_threshold: 0.25
-  marlin_min_connections: 20
-
-  # SUCI-Catcher (Braunschmied TU Wien 2025)
-  suci_replay_window_seconds: 60
-  suci_min_replays: 2
-  suci_aka_failure_rate_threshold: 0.10
-
-  # Overshadow Attack (Tucker et al. 2025)
-  overshadow_min_clean_events: 10
-  overshadow_clean_cell_score_threshold: 0.70
-
-# ── Detector Control ────────────────────────────────────────────────────────
-detectors:
   identity_harvest:
-    enabled: true
-    extended_catalog: true
+    window_seconds: 120
+    max_requests: 2           # 3GPP TS 24.301 max 2 per attach procedure
+    flag_imeisv: true         # IMEISV = YAICD P7 score 2.0
+
   cipher_downgrade:
-    enabled: true
-  rogue_tower:
-    enabled: true
-  handover_inject:
-    enabled: true
-  proximity_track:
-    enabled: true
-  paging_anomaly:
-    enabled: true
-  earfcn_anomaly:
-    enabled: true
+    flag_eea0: true           # EEA0 = null LTE encryption
+    flag_eia0: true           # EIA0 = null LTE integrity (TS 33.401 violation)
+    flag_a5_0: true           # A5/0 = null GSM encryption
+
   rrc_periodicity:
-    enabled: true
-    target_period_seconds: 210.2
-    field_confirmed: true
-  marlin_exposure_rate:
-    enabled: true
-  suci_catcher:
-    enabled: true
-  overshadow:
-    enabled: true
+    cycle_seconds: 210.2      # srsRAN 23.04 / OpenAirInterface default
+    tolerance_seconds: 15.0   # Jitter window around target
+    min_observations: 3       # Minimum intervals to trigger
+    sd_threshold_ms: 200      # Machine-precision threshold (SD < 200ms)
+    harris_t1_seconds: 610.6  # HailStorm T1 signature
+    harris_t1_tolerance: 5.0  # Tolerance for T1 check
 
-# ── Hardware Fingerprinting ─────────────────────────────────────────────────
-hardware_fingerprinting:
-  enabled: true
-  devices:
-    - harris_hailstorm
-    - harris_kingfish
-    - harris_stingray2
-    - pki_1625
-    - pki_1650
-    - srsran_4g
-    - srsran_5g_sa
-    - unknown_commercial
-    - unknown_opensource
-    - overshadow_platform
+  rogue_tower:
+    cross_carrier_gap_seconds: 1.0
+    min_rogue_cid_events: 2
+    # Known confirmed rogue CIDs from Cranbourne East investigation
+    known_rogue_cids:
+      - "137713195"
+      - "137713155"
+      - "137713175"
+      - "137713185"
 
-# ── Investigation Context ────────────────────────────────────────────────────
-investigation:
-  case_references:
-    - "CIRS-20260331-141"
-    - "ENQ-1851DVJH04"
-    - "TIO 2026-03-04898"
-  investigator: "Julian Burns"
-  location: "Cranbourne East, Victoria, Australia"
-  reporting_standard: "ACMA Radiocommunications Act 1992 s.189"
-  # FIX v2.1: Added investigation_start_date for correct persistence calculation.
-  # Tool was reporting PERSISTENCE: 0.9 days (span of current batch only).
-  # The operation has been confirmed since at least 19 December 2024.
-  investigation_start_date: "2024-12-19"
-  confirmed_operation_start: "2024-12-19"
-  confirmed_operation_end: "ongoing"
-  total_confirmed_days: 506   # Dec 19 2024 to May 9 2026 — update as investigation continues
+  earfcn_anomaly:
+    flag_nonstandard: true
+    # Known rogue EARFCNs confirmed in Cranbourne East captures
+    known_rogue_earfcns:
+      - 16384    # Outside all standard 3GPP TS 36.101 LTE band tables
+      - 450
+      - 550
+      - 1275
+      - 1406
+      - 1550
+      - 3148
+      - 9410
 
-# ── Research Citations ───────────────────────────────────────────────────────
-citations:
-  - id: tucker_2025_marlin
-    authors: "Tucker, Bennett, Kotuliak, Erni, Capkun, Butler, Traynor"
-    title: "Detecting IMSI-Catchers by Characterizing Identity Exposing Messages in Cellular Traffic"
-    venue: "NDSS 2025"
-    key_contribution: "53-message catalog, 3% baseline, causal vs correlated paradigm"
-  - id: braunschmied_2025_suci
-    authors: "Braunschmied, Maximilian"
-    title: "Countering SUCI-Catcher: Practical Implementation and Mitigation Against SUCI Replay Attacks"
-    venue: "TU Wien Diploma Thesis, April 2025"
-    key_contribution: "5G SA SUCI-Catcher attack + Bloom filter mitigation"
-  - id: ransacked_2024
-    authors: "Bennett et al."
-    title: "RANsacked: A Domain-Informed Approach for Fuzzing LTE and 5G RAN-Core Interfaces"
-    venue: "CCS 2024"
-    key_contribution: "119 CVEs, 18% incidents from BS equipment"
-  - id: seaglass_2017
-    authors: "Ney, Smith, Cadamuro, Kohno"
-    title: "SeaGlass: Enabling City-Wide IMSI-Catcher Detection"
-    venue: "PoPETs 2017"
-    key_contribution: "BCCH outlier signatures, city-wide deployment methodology"
-  - id: burns_2026_field
-    authors: "Julian Burns"
-    title: "Forensic Investigation: Rogue Cellular Infrastructure, Cranbourne East VIC"
-    venue: "Independent field investigation 2024-2026"
-    case_refs: "CIRS-20260331-141, ENQ-1851DVJH04, TIO 2026-03-04898"
-    key_contribution: >
-      Three-phase operational timeline confirmed (Dec 2024-May 2026).
-      Phase 2: 210.2s Telstra / 40.5s Vodafone metronomic T3, cross-carrier
-      simultaneous release (0-second gap Apr 8 2026), IMEISV harvesting confirmed
-      tshark-verified (1778156124.pcapng frames 650/1098/1970/2639).
-      T1 = 610.6s ±0.55s confirmed on both carriers (9 May 2026).
-      Post-ACMA visit (8 May 2026): T3 chaotic, T1 unchanged, 8 rogue CIDs on-air.
+  # ---------------------------------------------------------------------------
+  # Heuristic Scorer — 10-Heuristic IMSI Catcher Detection Framework
+  # Sources: Dabrowski 2014, IMSI Catchers Survey 2015, Ziayi 2021,
+  #          Kareem 2023, Sumailov 2023, Enea 2024
+  # ---------------------------------------------------------------------------
+  heuristic_scorer:
+    # Minimum IMSI/IMEISV requests to score P7 (Ziayi et al. 2021)
+    # Set to 2 — IdentityHarvestDetector already requires >2 to fire
+    imeisv_min_events: 2
+
+    # Maximum EEA0 events allowed for transparent-proxy confirmation
+    # 0 = strict (any EEA0 = not full transparent proxy mode)
+    eea0_max_for_transparent_proxy: 0
+
+    # Persistence thresholds for heuristic 4.1.9 (inverted)
+    persistence_days_professional: 90    # >90 days = PARTIAL confirmation
+    persistence_days_harris: 300         # >300 days = CONFIRMED (federal grade)
+
+reporting:
+  severity_levels: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+  min_severity: "LOW"
+  include_raw_events: false
+  timestamp_format: "%Y-%m-%d %H:%M:%S UTC"
+
+hardware_fingerprint:
+  confidence_threshold: 0.3
+  harris_t1_seconds: 610.6
+  harris_t1_tolerance_seconds: 5.0
+  harris_persistence_threshold_days: 300

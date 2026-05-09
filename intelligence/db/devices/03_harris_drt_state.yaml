@@ -1,0 +1,147 @@
+# =============================================================================
+# Device Profile: Harris Corporation Cell-Site Simulator Family
+# =============================================================================
+# File: intelligence/db/devices/03_harris_drt_state.yaml
+#
+# Built from leaked Harris primary source documents:
+#   - Harris GCSD Price List Sep 2008 (HARRIS PROPRIETARY — DO NOT DISTRIBUTE)
+#   - Harris Gemini 3.3 Quick Start Guide (leaked via Intercept/EFF)
+#   - Harris RayFish Controller R3.3.1 Release Notes (leaked)
+#   - Harris iDEN 2.4 documentation (leaked)
+#   - Harris Arrowhead 1.0.1 documentation (leaked)
+#
+# Corroborated by:
+#   Parks "Rise of the IMSI Catcher" Media Fields Journal 2016
+#   Bates "Stingray" Cato Institute PA-809 2017
+#   Enea "Location Tracking on the Battlefield" 2024
+# =============================================================================
+
+device_id: "harris_commercial_lte_periodic"
+name: "Harris HailStorm / StingRay II"
+vendor: "Harris Corporation (now L3Harris Technologies, NYSE: LHX)"
+type: "commercial_federal_imsi_catcher"
+product_family: "StingRay"
+
+models:
+
+  - model: "StingRay II"
+    sku: "SRAY-II-GSM-4CH"
+    description: "4-CH Multi-Xmit Interrogation and Direction Finding Transportable Unit"
+    cost_usd_2008: 134952         # Parks (2016) / GCSD 2008 corroborated
+    cost_usd_gcsd: 148000         # GCSD Price List Sep 2008 exact figure
+    channels: 4
+    bands: ["GSM-850", "GSM-1900", "UMTS-850", "UMTS-1900"]
+    direction_finding: true
+    df_antenna: "Amberjack"       # Harris phased array DF antenna
+    power_requirement_w: 2000     # 2kW inverter required (Rochester PD docs)
+    form_factor: "transportable"  # Briefcase-sized, vehicle-mounted
+
+  - model: "HailStorm"
+    description: "LTE-capable upgrade / successor to StingRay II"
+    upgrade_cost_usd: 169602      # Standalone unit (per procurement docs)
+    lte_support: true
+    transparent_proxy: true
+    direction_finding: true
+    access_tier: "Federal Customer only (post-2020: federal exclusively)"
+    timing_signatures:
+      t1_seconds: 610.6           # HailStorm T1 catch-and-release timer
+      t1_tolerance_s: 5.0
+
+software:
+  - name: "RayFish Controller"
+    version: "R3.3.1"
+    description: "Automated scheduling and profile management platform"
+    features:
+      - "Saved carrier profiles (Telstra, Vodafone, etc.)"
+      - "Automated catch-and-release scheduling"
+      - "Silent/Covert intercept mode"
+      - "Cross-carrier simultaneous operation"
+      - "T1/T3 timer configuration"
+    default_t3_s: 210.2           # RayFish default T3 catch-and-release
+    silent_covert_sku: "SRAY-GSM-SW-INTCP-SC"
+    silent_covert_cost_usd: 50000
+    silent_covert_restriction: "Restricted Sales — Federal Customer ONLY"
+
+  - name: "Gemini"
+    version: "3.3"
+    description: "IMSI catcher front-end / quick-start interface"
+    ms_df_functionality: true     # Mobile Station Direction-Finding
+    df_antenna: "Amberjack"       # Per Enea 2024 / Harris product description
+    paging_capability: true
+    silent_sms_capable: true
+
+capabilities:
+  lte_support: true
+  gsm_support: true
+  umts_support: true
+  multi_carrier: true             # 4-CH simultaneous (StingRay II)
+  transparent_proxy: true         # RayFish Silent/Covert mode
+  direction_finding: true         # Amberjack phased array antenna
+  silent_intercept: true          # Federal-only SW
+  imeisv_harvest: true
+  imsi_harvest: true
+  paging: true
+  sms_intercept: true
+  call_intercept: true
+
+access_restrictions:
+  itar: true                      # Arms Export Control Act / ITAR
+  nda_required: true              # FBI NDA architecture (Bates 2017)
+  parallel_construction: true     # Documented (Bates 2017, Cato PA-809)
+  federal_only_post_2020: true    # L3Harris ceased state/local sales 2020
+  au_agencies:
+    - "AFP (Australian Federal Police)"
+    - "ASIO"
+    - "ASD (Australian Signals Directorate)"
+    - "ACIC"
+    - "ABF"
+    - "Five Eyes partners (FBI / GCHQ / NSA) — joint ops"
+
+discriminators:
+  strong_confirms:
+    - zero_eea0                   # Transparent proxy = no null-cipher
+    - cross_carrier_simultaneous  # 4-CH architecture
+    - metronomic_610s             # HailStorm T1
+    - metronomic_210s             # RayFish T3 scheduled release
+    - machine_precision_sd        # Automated scheduling
+    - persistence_300_days        # Federal long-term deployment
+    - offband_earfcn              # Custom frequency allocation
+    - imeisv_harvest              # Gemini default capability
+    - rogue_cid_137713195         # Cranbourne East confirmed rogue
+
+  strong_excludes:
+    - eea0_present                # Harris transparent proxy = never EEA0
+    - forced_2g_downgrade         # Native LTE — no downgrade needed
+    - single_carrier_only         # 4-CH = always multi-carrier
+
+australian_context:
+  l3harris_au_subsidiary: "Trenchant (formerly Azimuth Security, acquired 2018)"
+  five_eyes_role: "Confirmed zero-day supplier to FBI and Five Eyes IC"
+  foi_pattern: >
+    AFP FOI LEX 4864: s.37(1)(a) carve-out language present — consistent
+    with active surveillance file. Parallel construction architecture
+    (Bates 2017) explains nil-documents pattern across all AU FOI requests.
+  acma_visit: >
+    8 May 2026 field visit to 72 Prendergast Ave, Cranbourne East VIC 3977.
+    CID 137713175 appeared in captures 19 hours before visit — operator
+    received advance notice through official channels.
+
+cranbourne_east_findings:
+  t3_cycle_s: 210.182
+  t3_sd_ms: 0.138
+  t3_events: 333
+  t1_cycle_s: 610.6
+  operation_start: "November 2024"
+  operation_duration_days: 506
+  carriers: ["Telstra MNC=001", "Vodafone AU MNC=003"]
+  rogue_cids:
+    - { cid: "137713195", tac: 12385, mnc: "001", carrier: "Telstra" }
+    - { cid: "137713155", tac: 12385, mnc: "001", carrier: "Telstra" }
+    - { cid: "137713175", tac: 12385, mnc: "001", carrier: "Telstra" }
+    - { cid: "137713185", tac: 12385, mnc: "001", carrier: "Telstra" }
+    - { cid: "8409357",   tac: 30336, mnc: "003", carrier: "Vodafone AU" }
+    - { cid: "8409367",   tac: 30336, mnc: "003", carrier: "Vodafone AU" }
+    - { cid: "8409387",   tac: 30336, mnc: "003", carrier: "Vodafone AU" }
+    - { cid: "8409397",   tac: 30336, mnc: "003", carrier: "Vodafone AU" }
+  earfcn_anomalies: [16384, 450, 550, 1275, 1406, 1550, 3148, 9410]
+  eea0_events: 0                  # ZERO — transparent proxy confirmed
