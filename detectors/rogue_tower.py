@@ -78,9 +78,19 @@ class RogueTowerDetector(BaseDetector):
         ):
             cell_summary = []
             for c in all_cells:
+                # FIX v2.1: use per-cell MCC/MNC stored during _collect_cells
+                # Previous bug: always showed session MNC (001) for all cells
+                # including Vodafone (505-03) cells. Now reads from per-cell dict.
+                c_mcc = c.get("mcc", self.mcc)
+                c_mnc = c.get("mnc", self.mnc)
+                # Map MNC to carrier name for clarity
+                carrier_map = {"001": "Telstra", "01": "Telstra",
+                               "003": "Vodafone AU", "03": "Vodafone AU",
+                               "006": "Optus AU",   "06": "Optus AU"}
+                carrier = carrier_map.get(c_mnc, f"MNC={c_mnc}")
                 cell_summary.append(
                     f"CID={c.get('cell_id')} TAC={c.get('tac','?')} "
-                    f"MCC={self.mcc} MNC={self.mnc} "
+                    f"MCC={c_mcc} MNC={c_mnc} ({carrier}) "
                     f"observations={len(c.get('events',[]))}"
                 )
             if len(all_cells) >= 2:
@@ -255,6 +265,10 @@ class RogueTowerDetector(BaseDetector):
             earfcn   = ev.get("earfcn")
             tac      = ev.get("tac")
             rsrp     = ev.get("rsrp")
+            # FIX v2.1: read per-cell MCC/MNC from event dict (set by ndjson_parser
+            # from SIB1 PLMN field). Previously always used session default (001).
+            ev_mcc  = ev.get("mcc") or self.mcc
+            ev_mnc  = ev.get("mnc") or self.mnc
 
             if not (cell_id or earfcn):
                 continue
@@ -263,10 +277,12 @@ class RogueTowerDetector(BaseDetector):
             if key not in cell_map:
                 cell_map[key] = {
                     "cell_id": cell_id,
-                    "earfcn": earfcn,
-                    "tac": tac,
-                    "rsrp": rsrp,
-                    "events": [],
+                    "earfcn":  earfcn,
+                    "tac":     tac,
+                    "rsrp":    rsrp,
+                    "mcc":     ev_mcc,
+                    "mnc":     ev_mnc,
+                    "events":  [],
                 }
             cell_map[key]["events"].append(ev)
             # Track best (highest) RSRP reading
