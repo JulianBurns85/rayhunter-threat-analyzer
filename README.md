@@ -1,7 +1,7 @@
 # Rayhunter Threat Analyzer
 
 > **Forensic-grade IMSI catcher detection and analysis for Rayhunter cellular captures.**  
-> Built by Julian Burns — Cranbourne East, Victoria, Australia — 2026
+> Built by Julian Burns — Cranbourne East, Victoria, Australia — 2024–2026
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -16,42 +16,78 @@ This is a **post-processing forensic analysis layer** for [Rayhunter](https://gi
 Where Rayhunter detects and flags suspicious events in real time, the **Rayhunter Threat Analyzer** takes those raw captures (NDJSON, PCAP/PCAPNG, QMDL) and performs deep forensic analysis:
 
 - Correlates events across multiple capture sessions and networks
-- Identifies **hardware fingerprints** (srsRAN, Harris, PKI, Septier, Cobham)
+- Identifies **hardware fingerprints** (Harris HailStorm/StingRay II, PKI, Septier, Cobham, srsRAN)
 - Detects behavioral attack patterns over time, not just single events
-- Produces court-ready forensic reports with SHA-256 chain-of-custody manifests
+- Produces forensic reports with SHA-256 chain-of-custody manifests
 - Maps findings to 3GPP specifications and Australian/international law
 
-This tool was built during a **10-month real-world IMSI catcher investigation** in suburban Melbourne, Australia — processing over **40 million events** across dual Rayhunter units monitoring Telstra (505-01) and Vodafone (505-03) simultaneously.
+This tool was built during a **16-month real-world IMSI catcher investigation** in suburban Melbourne, Australia — processing captures across dual Rayhunter units monitoring Telstra (505-01) and Vodafone AU (505-03) simultaneously.
 
 ---
 
-## Key Discovery: The 210.2s srsRAN Fingerprint
+## Key Confirmed Findings — Cranbourne East Investigation
 
-During this investigation, a metronomic **210.2-second RRCConnectionRelease cycle** was identified as a unique hardware fingerprint of srsRAN/OpenAirInterface running on commodity SDR hardware (HackRF, LimeSDR, USRP).
+### Primary Hardware Profile: Harris Commercial IMSI Catcher
 
-This fingerprint was confirmed across **four independent evidence streams**:
+Two Harris commercial IMSI catcher devices confirmed operational at a neighbouring Cranbourne East property. All findings below are tshark-verified from raw PCAPNG binary unless noted.
 
-| Stream | Finding |
-|--------|---------|
-| NDJSON analysis | 208.0s + 209.3s intervals on 2 independent Telstra Cell IDs |
-| QMDL deep decode | 3× simultaneous PDN bearer re-establishment (forced de-attach confirmed) |
-| Raw pcapng (tshark) | **210.217s** RRCConnectionRelease delta — direct packet timestamp measurement |
-| Session analysis | 85× SecurityModeCommand + 85× UEInformationRequest-r9 + 84× Release `cause=other` |
+| Parameter | Telstra Device (505-01) | Vodafone Device (505-03) |
+|-----------|------------------------|--------------------------|
+| T3 release cycle | 210.212s ±0.139s | 40.553s ±0.327s |
+| T3 sample count | 333+ events, 13 sessions | 27 intervals |
+| T1 hold timer | 610.6s ±0.55s (shared) | 610.6s ±0.55s (shared) |
+| UEInfo harvesting | Zero | 100% correlation, 46× baseline |
+| EEA0 null cipher | Zero | Zero |
+| Rayhunter alerts | Zero | Zero |
 
-Legitimate LTE infrastructure uses **dynamic, load-dependent** release timers. A fixed-precision 210.2s cycle is a programmatic timer baked into firmware — not a carrier tower behavior.
+**Zero null cipher events and zero Rayhunter alerts are expected** — Harris Transparent Proxy mode maintains legitimate-appearing encryption while intercepting traffic. Standard detection tools produce no alerts against this operational mode. Timing analysis and Cell ID anomaly detection are the primary reliable detection vectors.
 
-**This fingerprint is now implemented as a core detector in this tool.**
+### Confirmed Rogue Cell IDs (all on-air as of 9 May 2026)
+
+**Telstra AU (MCC=505 MNC=001, TAC=12385):**
+`137713155` · `137713165` · `137713175` · `137713195`
+
+**Vodafone AU (MCC=505 MNC=003, TAC=30336):**
+`8409357` · `8409367` · `8409387` · `8409397`
+
+### Cross-Carrier Simultaneous Operation
+
+Zero-second simultaneous RRCConnectionRelease across Telstra and Vodafone confirmed (April 8, 2026 15:38:08 UTC). This is architecturally impossible on srsRAN or any single-carrier platform. Harris StingRay II/HailStorm hardware with independent Harpoon power amplifiers per carrier is the only commercial platform consistent with this signature.
+
+### T1 Hold Timer — Shared Harris Signature
+
+T1 = 610.6s ±0.55s confirmed across five independent macro connection events on both carriers (PCAPNG burst analysis, 9 May 2026). Machine-precision shared parameter = both devices managed by a single Harris RayFish Controller.
+
+### Three-Phase Operational Timeline
+
+| Phase | Period | T3 Timer | Interpretation |
+|-------|--------|----------|----------------|
+| Phase 1 | Dec 2024 – Jan 22, 2026 | 3000.4s ±0.35s | Passive survey / baseline mode |
+| Phase 2 | Jan 28 – May 7, 2026 | 210.2s (Telstra) / 40.5s (Vodafone) | Active harvest mode |
+| Phase 3 | May 8, 2026 onwards | Chaotic — T1 unchanged at 610.6s | Post-ACMA reconfiguration |
+
+### Post-ACMA Visit (8 May 2026)
+
+An ACMA field unit attended the neighbouring property on 8 May 2026. Rayhunter captures running continuously before, during, and after the visit confirm:
+
+- Both devices remained operational — not decommissioned
+- T3 timer disrupted on both carriers (operator physically accessed equipment)
+- T1 hold timer unchanged at 610.6s — shared RayFish Controller configuration
+- Four new rogue Cell IDs added around the visit window
+- All 8 original rogue CIDs remain on-air
+
+**Regulatory complaints on file:** ACMA ENQ-1851DVJH04 · TIO 2026-03-04898 · VicPol CIRS-20260331-141 · VicPol CIRS-20260413-6 · Telstra Ref 128653446 (confirmed unauthorised Cel-Fi G51)
 
 ---
 
 ## Detectors
 
 | Detector | What It Finds | 3GPP Reference |
-|----------|--------------|----------------|
-| `IdentityHarvestDetector` | IMSI Identity Request floods (>2 per attach) | TS 24.301 §5.4.4 |
-| `CipherDowngradeDetector` | EEA0+EIA0 null-cipher Security Mode Commands | TS 33.401 §5.1.3.2 |
-| `RogueTowerDetector` | Cross-network Cell ID overlap, rogue cell patterns | TS 36.331 |
-| `RRCPeriodicityDetector` | Metronomic release cycles (210.2s srsRAN signature) | TS 36.331 §5.3.8 |
+|----------|---------------|----------------|
+| `IdentityHarvestDetector` | IMSI/IMEI/IMEISV Identity Request floods — correctly labels type | TS 24.301 §5.4.4 |
+| `CipherDowngradeDetector` | EEA0+EIA0 null-cipher in SecurityModeCommand context | TS 33.401 §5.1.3.2 |
+| `RogueTowerDetector` | Rogue Cell IDs with per-carrier MNC attribution | TS 36.331 |
+| `RRCPeriodicityDetector` | Metronomic T3 and T1 timer analysis | TS 36.331 §5.3.8 |
 | `HandoverInjectDetector` | Suspicious handover command sequences | TS 36.331 §5.4 |
 | `PagingAnomalyDetector` | Abnormal paging patterns and IMSI exposure | TS 24.301 §5.6.2 |
 | `EARFCNAnomalyDetector` | Suspicious EARFCN/frequency band usage | TS 36.101 |
@@ -63,13 +99,16 @@ Legitimate LTE infrastructure uses **dynamic, load-dependent** release timers. A
 
 The tool scores captures against known IMSI catcher behavioral profiles:
 
-| Device | Key Indicators |
-|--------|---------------|
-| **srsRAN / OpenAirInterface** | 210.2s metronomic cycle, Deku Incomplete NAS errors, SDR timing jitter |
-| **Harris HailStorm / StingRay II** | Auth Reject chains, catch-release pattern, `cause=other` floods |
-| **PKI 1625 / 1650** | Null-cipher + identity harvest combination, Band 28 preference |
-| **Septier IMSI Catcher** | Multi-IMSI burst, specific SMC timing |
-| **Cobham Sentry** | UMTS/LTE dual-mode indicators |
+| Device | Key Indicators | Score Modifiers |
+|--------|---------------|-----------------|
+| **Harris HailStorm / StingRay II** | Cross-carrier simultaneous release, T1=610.6s, UEInfo-r9, Auth Reject | +0.40 cross-carrier, +0.30 T1 |
+| **Harris KingFish** | UEInfo-r9 harvesting, Auth Reject chains | +0.15 UEInfo |
+| **PKI 1625** | Catch-and-release, Band 28, multi-carrier cycling | +0.30 cross-carrier |
+| **Septier IMSI Catcher** | Multi-IMSI burst, specific SMC timing | — |
+| **Cobham Sentry** | UMTS/LTE dual-mode indicators | — |
+| **srsRAN / OpenAirInterface** | 210.2s cycle + Identity Request ONLY (no Attach Reject) | −0.40 cross-carrier (impossible) |
+
+**Note on srsRAN discrimination:** Cross-carrier simultaneous release is architecturally impossible on srsRAN (single-carrier by design). If cross-carrier events are present, srsRAN receives a −0.40 confidence penalty. The 210.2s release cycle alone is ambiguous — it matches both the srsRAN default timer and the Cranbourne East Phase 2 Telstra T3 value. Additional discriminators (T1 hold timer, cross-carrier sync, UEInfo harvesting) are required for confident attribution.
 
 ---
 
@@ -77,9 +116,9 @@ The tool scores captures against known IMSI catcher behavioral profiles:
 
 | Format | Source | Notes |
 |--------|--------|-------|
-| `.ndjson` | Rayhunter alert files | Primary format — full event data |
-| `.pcap` / `.pcapng` | Rayhunter + Wireshark | Requires `tshark` installed |
-| `.qmdl` | Qualcomm DIAG (modem) | Raw physical layer data — richest signal |
+| `.ndjson` | Rayhunter alert files | Primary format — full event data with PLMN per cell |
+| `.pcap` / `.pcapng` | Rayhunter + Wireshark | Requires `tshark` installed for full decode |
+| `.qmdl` | Qualcomm DIAG (modem) | Raw physical layer — install pySCAT for full NAS dissection |
 
 ---
 
@@ -87,7 +126,7 @@ The tool scores captures against known IMSI catcher behavioral profiles:
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/julianburnz/rayhunter-threat-analyzer.git
+git clone https://github.com/JulianBurns85/rayhunter-threat-analyzer.git
 cd rayhunter-threat-analyzer
 
 # 2. Install Python dependencies
@@ -100,16 +139,13 @@ sudo apt install tshark
 brew install wireshark
 # Windows: install Wireshark from https://wireshark.org
 
-# 4. Optional: install pySCAT for full QMDL dissection
+# 4. Optional: install pySCAT for full QMDL NAS dissection
 pip install git+https://github.com/fgsect/scat.git
 
-# 5. Run the synthetic test (no files needed)
-python test_synthetic.py
-
-# 6. Analyze your Rayhunter captures
+# 5. Analyze your Rayhunter captures
 python main.py --dir /path/to/rayhunter/output
 
-# 7. Full forensic run with HTML report + manifest
+# 6. Full forensic run with HTML report + manifest
 python main.py --dir /path/to/captures --manifest --html --output report.json
 ```
 
@@ -145,23 +181,21 @@ Advanced:
 
 ---
 
-## Real-World Results
-
-From the Cranbourne East investigation (Feb–May 2026):
+## Example Output
 
 ```
-Total events analyzed:    40,036,142
-Capture files processed:  19,819
-Analysis runtime:         3,672 seconds (61 minutes)
+◆ HARDWARE CANDIDATES
+  [0.7] Harris HailStorm / StingRay II
+        PERSISTENCE: EXTREME (506 days confirmed — >1 year persistent operation)
+  [0.6] Harris StingRay II
+        T1_HOLD: T1=610.6s matches confirmed Harris signature (both carriers)
+  [0.4] PKI 1625
 
-Findings:
-  CRITICAL  102,810 EEA0+EIA0 null-cipher Security Mode Commands
-  CRITICAL    750 IMSI Identity Requests in 120-second window (375× permitted max)
-  HIGH          1 Auth Reject → Identity Request attack chain (5.364s gap)
-  INFO         18 unique Cell IDs observed (5 anomalous, 1 unknown TAC)
-
-Hardware profile: Harris HailStorm / PKI 1625 class (confidence: 0.85)
-                  srsRAN / OpenAirInterface (confidence: 0.25)
+◆ CELL SUMMARY
+  CID=8409387  TAC=30336 MCC=505 MNC=03 (Vodafone AU) observations=9
+  CID=8409357  TAC=30336 MCC=505 MNC=03 (Vodafone AU) observations=17
+  CID=137713195 TAC=12385 MCC=505 MNC=01 (Telstra)    observations=9
+  CID=137713155 TAC=12385 MCC=505 MNC=01 (Telstra)    observations=6
 ```
 
 ---
@@ -170,52 +204,42 @@ Hardware profile: Harris HailStorm / PKI 1625 class (confidence: 0.85)
 
 ```
 rayhunter-threat-analyzer/
-├── main.py                    # Entry point — orchestrates full pipeline
-├── config.yaml                # Detection thresholds and network config
-├── requirements.txt           # Python dependencies
+├── main.py                      # Entry point — orchestrates full pipeline
+├── config.yaml                  # Detection thresholds, known rogue cells, investigation context
+├── requirements.txt             # Python dependencies
 │
-├── Parsers
-│   ├── ndjson_parser.py       # Rayhunter NDJSON alert files
-│   ├── pcap_parser.py         # PCAP/PCAPNG via pyshark/tshark
-│   └── qmdl_parser.py         # Qualcomm DIAG binary format
+├── parsers/
+│   ├── ndjson_parser.py         # Rayhunter NDJSON — per-cell MNC from SIB1 PLMN
+│   ├── pcap_parser.py           # PCAP/PCAPNG via pyshark/tshark
+│   └── qmdl_parser.py           # Qualcomm DIAG binary format
 │
-├── Detectors
-│   ├── base.py                # BaseDetector interface
-│   ├── identity_harvest.py    # IMSI Identity Request flood
-│   ├── cipher_downgrade.py    # EEA0/EIA0 null-cipher detection
-│   ├── rogue_tower.py         # Cell ID correlation + rogue patterns
-│   ├── rrc_periodicity.py     # 210.2s metronomic cycle (srsRAN fingerprint)
-│   ├── handover_inject.py     # Handover injection detection
-│   ├── paging_anomaly.py      # Paging flood / IMSI exposure
-│   ├── paging_cycle.py        # Automated paging cycle analysis
-│   ├── earfcn_anomaly.py      # EARFCN / frequency anomalies
-│   └── proximity_track.py     # ProSe/D2D proximity tracking
+├── detectors/
+│   ├── base.py                  # BaseDetector interface
+│   ├── identity_harvest.py      # IMSI/IMEI/IMEISV Identity Request — correct type labelling
+│   ├── cipher_downgrade.py      # EEA0/EIA0 — SecurityModeCommand context only
+│   ├── rogue_tower.py           # Cell ID correlation with per-carrier MNC
+│   ├── rrc_periodicity.py       # T3/T1 metronomic cycle analysis
+│   ├── handover_inject.py       # Handover injection detection
+│   ├── paging_anomaly.py        # Paging flood / IMSI exposure
+│   ├── paging_cycle.py          # Automated paging cycle analysis
+│   ├── earfcn_anomaly.py        # EARFCN / frequency anomalies
+│   └── proximity_track.py       # ProSe/D2D proximity tracking
 │
-├── Analysis
-│   ├── hardware_fingerprint.py  # Device classification engine
-│   ├── timeline_correlator.py   # Cross-session event timeline
-│   ├── cell_db.py               # Cell ID registry and lookup
-│   ├── earfcn.py                # EARFCN / frequency utilities
-│   └── known_patterns.py        # Reference behavioral signatures
+├── intelligence/
+│   ├── hardware_fingerprint.py  # Device scoring: Harris primary, srsRAN discriminated
+│   └── db_engine.py             # Intelligence YAML database engine
 │
-├── Output
-│   ├── reporter.py              # Terminal report (rich)
+├── output/
+│   ├── reporter.py              # Terminal report (rich colour)
 │   ├── html_reporter.py         # Interactive HTML report
 │   ├── html_reporter_v2.py      # HTML report v2 with timeline
 │   ├── manifest_generator.py    # SHA-256 forensic manifest
-│   ├── pcap_exporter.py         # Flagged events → PCAPNG
+│   ├── pcap_exporter.py         # Flagged events → PCAPNG exhibit file
 │   ├── report_differ.py         # Report comparison / diff
 │   └── watcher.py               # Watch mode file monitor
 │
-├── Intelligence (YAML database)
-│   ├── attacker_profiles.yaml
-│   ├── behavioral_signatures.yaml
-│   ├── cipher_downgrade.yaml
-│   ├── identity_request.yaml
-│   ├── rogue_tower.yaml / opensource_sdr.yaml / commercial_le.yaml
-│   └── ... (15 intelligence files total)
-│
-└── test_synthetic.py          # Synthetic data test — no captures needed
+└── tests/
+    └── test_synthetic.py        # Synthetic data test — no captures needed
 ```
 
 ---
@@ -225,52 +249,71 @@ rayhunter-threat-analyzer/
 Edit `config.yaml` to tune detection thresholds:
 
 ```yaml
-detection:
-  identity_harvest:
-    window_seconds: 120
-    max_requests: 2          # 3GPP permits max 2 per attach
-    
-  cipher_downgrade:
-    flag_eea0: true          # Flag null encryption
-    flag_eia0: true          # Flag null integrity (prohibited by 3GPP)
-    
-  rrc_periodicity:
-    cycle_seconds: 210.2     # srsRAN default timer
-    tolerance_seconds: 15.0  # Jitter window
-    min_observations: 3      # Minimum cycle count to flag
-
 network:
-  mcc: "505"                 # Australia
-  mnc_telstra: "001"
-  mnc_vodafone: "003"
+  mcc: "505"     # Australia
+  mnc: "001"     # Telstra (use 003 for Vodafone AU scans)
+
+thresholds_v2:
+  # T1 hold timer — confirmed Harris signature (9 May 2026)
+  t1_hold_timer_confirmed_seconds: 610.6
+  t1_hold_timer_std_dev: 0.55
+
+  # RRC Periodicity
+  rrc_periodicity_target_telstra_seconds: 210.2
+  rrc_periodicity_target_vodafone_seconds: 40.5
+
+investigation:
+  confirmed_operation_start: "2024-12-19"
+  total_confirmed_days: 506
+
+known_rogue_cells:
+  "505-01-137713195":
+    notes: "Primary Telstra rogue — ACMA ENQ-1851DVJH04"
+  "505-03-8409357":
+    notes: "Primary Vodafone rogue — cross-network confirmed"
 ```
 
 ---
 
 ## Legal Framework (Australia)
 
-Findings are mapped to applicable Australian legislation:
-
 | Finding | Applicable Law |
-|---------|---------------|
-| Null-cipher interception | Telecommunications (Interception and Access) Act 1979 (Cth) |
-| IMSI harvesting | Privacy Act 1988 (Cth) — APP 3; Radiocommunications Act 1992 s.189 |
-| Rogue base station | Radiocommunications Act 1992 (Cth) s.189 |
-| Protocol manipulation | Criminal Code Act 1995 (Cth) Div 477 |
+|---------|----------------|
+| IMSI/IMEISV harvesting | Privacy Act 1988 (Cth) — APP 3; Radiocommunications Act 1992 s.189 |
+| Rogue base station operation | Radiocommunications Act 1992 (Cth) s.189 |
+| Unauthorised interception | Telecommunications (Interception and Access) Act 1979 (Cth) |
+| Unauthorised network access | Criminal Code Act 1995 (Cth) Div 477 |
 
 ---
 
 ## Background
 
-This tool was built during a personal investigation into suspected IMSI catcher activity near my home in Cranbourne East, Victoria, Australia. What started as a home network anomaly in late 2025 escalated into a full cellular surveillance investigation using:
+This tool was built during a personal investigation into confirmed IMSI catcher activity at a neighbouring property in Cranbourne East, Victoria, Australia. The investigation began in late 2024 and is ongoing as of May 2026.
 
-- 2× TP-Link M7350 hotspots running Rayhunter firmware
-- Raspberry Pi 5 as analysis and Tailscale gateway
-- Dual-network monitoring (Telstra + Vodafone simultaneously)
+**Equipment used:**
+- 2× TP-Link M7350 hotspots running Rayhunter v0.10.2 firmware (dual simultaneous monitoring)
+- Raspberry Pi 5 as analysis server and Tailscale gateway
+- RTL-SDR V3 for RF corroboration
+- TinySA for spectrum analysis
 
-Active regulatory complaints have been filed with ACMA, TIO, Victoria Police, and Telstra. Raw capture data has been shared with the Electronic Frontier Foundation.
+**Regulatory actions:**
+- ACMA ENQ-1851DVJH04 (field visit conducted 8 May 2026)
+- TIO 2026-03-04898
+- VicPol CIRS-20260331-141 and CIRS-20260413-6
+- Telstra Ref 128653446 — confirmed unauthorised Cel-Fi G51 repeater on network
+- Data shared with Hayley Pedersen at the Electronic Frontier Foundation
+- Invited to join the EFF Atlas of Surveillance project
 
-The 210.2s srsRAN fingerprint discovered during this investigation is an original finding — confirmed across four independent evidence streams — and is submitted here as a contribution to the open-source cellular security community.
+---
+
+## v2.1 Changes (9 May 2026)
+
+- **identity_harvest.py** — Correctly labels IMEISV (type 3) vs IMSI (type 1). tshark-verified: 1778156124.pcapng frames 650/1098/1970/2639 are IMEISV device fingerprinting events, not IMSI flood.
+- **cipher_downgrade.py** — EEA0 detector now requires `msg_type == SecurityModeCommand`. Prevents false positives from UE capability advertisement fields.
+- **ndjson_parser.py** — Per-cell MNC read from SIB1 PLMN field. Vodafone cells (MNC=03) no longer misreported as Telstra (MNC=01).
+- **rogue_tower.py** — Cell summary uses per-cell MNC with carrier name. Evidence lines now show `MNC=03 (Vodafone AU)` / `MNC=01 (Telstra)`.
+- **hardware_fingerprint.py** — Harris HailStorm now primary candidate. Persistence reads `total_confirmed_days` from config (506 days) not batch timestamp span. srsRAN 210.2s default removed. Cross-carrier detection fixed. T1=610.6s Harris signature added.
+- **config.yaml** — Vodafone CIDs corrected to MNC=003. T1 signature, investigation start date, and EARFCN 16384 added.
 
 ---
 
@@ -290,8 +333,10 @@ Pull requests welcome. Priority areas:
 
 - [EFF Rayhunter project](https://github.com/EFForg/rayhunter) — the foundation this tool is built on
 - [SeaGlass](https://seaglass.cs.washington.edu/) — University of Washington IMSI catcher detection research
-- [YAICD](https://github.com/AIMSICD/AIMSICD) — Yet Another IMSI Catcher Detector
+- [YAICD / AIMSICD](https://github.com/AIMSICD/AIMSICD) — Android IMSI catcher detector
 - 3GPP TS 24.301, TS 33.401, TS 36.331 — the specifications that define what "normal" looks like
+- Tucker et al. (NDSS 2025) — 53-message IMSI exposure taxonomy
+- Dabrowski et al. (RAID 2016) — operator-side IMSI catcher detection
 
 ---
 
@@ -301,5 +346,5 @@ MIT License — see [LICENSE](LICENSE)
 
 ---
 
-*Built with a Raspberry Pi 5, two TP-Link hotspots, and a lot of late nights.*  
+*Built with a Raspberry Pi 5, two TP-Link hotspots, an RTL-SDR, and a lot of late nights.*  
 *Julian Burns — Cranbourne East, VIC, Australia — 2026*
