@@ -64,17 +64,9 @@ T1 = 610.6s ±0.55s confirmed across five independent macro connection events on
 |-------|--------|----------|----------------|
 | Phase 1 | Dec 2024 – Jan 22, 2026 | 3000.4s ±0.35s | Passive survey / baseline mode |
 | Phase 2 | Jan 28 – May 7, 2026 | 210.2s (Telstra) / 40.5s (Vodafone) | Active harvest mode |
-| Phase 3 | May 8, 2026 onwards | Chaotic — T1 unchanged at 610.6s | Post-ACMA reconfiguration |
+| Phase 3 | May 8, 2026 onwards | Chaotic — T1 unchanged at 610.6s | 
 
-### Post-ACMA Visit (8 May 2026)
-
-An ACMA field unit attended the neighbouring property on 8 May 2026. Rayhunter captures running continuously before, during, and after the visit confirm:
-
-- Both devices remained operational — not decommissioned
-- T3 timer disrupted on both carriers (operator physically accessed equipment)
-- T1 hold timer unchanged at 610.6s — shared RayFish Controller configuration
-- Four new rogue Cell IDs added around the visit window
-- All 8 original rogue CIDs remain on-air
+- Both devices remained operational — not decommiss
 
 **Regulatory complaints on file:** ACMA ENQ-1851DVJH04 · TIO 2026-03-04898 · VicPol CIRS-20260331-141 · VicPol CIRS-20260413-6 · Telstra Ref 128653446 (confirmed unauthorised Cel-Fi G51)
 
