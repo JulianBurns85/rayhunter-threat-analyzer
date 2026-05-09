@@ -185,6 +185,12 @@ class IntelligenceDB:
     def _load_devices(self) -> int:
         device_dir = self.DB_ROOT / "devices"
         count = 0
+        # FIX v2.1: warn gracefully instead of crashing on missing dir
+        if not device_dir.exists():
+            print(f"[IntelligenceDB] WARN: Device profiles path not found: {device_dir}")
+            print(f"[IntelligenceDB] WARN: Hardware attribution disabled. "
+                  f"Create {device_dir} and add device YAML files to enable.")
+            return 0
         for yaml_file in sorted(device_dir.glob("*.yaml")):
             try:
                 with open(yaml_file) as f:
@@ -341,7 +347,48 @@ class IntelligenceDB:
             if did in self.devices
         ]
         results.sort(key=lambda x: x[1], reverse=True)
-        return results[:8]  # Top 8
+        return results[:8]
+
+    def _calc_persistence_level(self) -> str:
+        """
+        FIX v2.1: Calculate persistence from config investigation dates.
+        Previous: used profile ratings (generic). Now: reads confirmed days.
+        Cranbourne East: 506 days confirmed (Dec 19 2024 - May 9 2026).
+        """
+        # Try to read from loaded config if available
+        try:
+            # Walk up from DB_ROOT to find config.yaml
+            config_path = self.DB_ROOT.parent.parent / "config.yaml"
+            if config_path.exists():
+                import yaml as _yaml
+                with open(config_path) as f:
+                    cfg = _yaml.safe_load(f)
+                inv = cfg.get("investigation", {})
+                total_days = inv.get("total_confirmed_days")
+                if total_days and isinstance(total_days, (int, float)):
+                    days = int(total_days)
+                    if days >= 365:
+                        return f"EXTREME ({days} days confirmed — >1 year persistent operation)"
+                    elif days >= 90:
+                        return f"HIGH ({days} days confirmed — multi-month campaign)"
+                    elif days >= 30:
+                        return f"MEDIUM ({days} days confirmed)"
+                    else:
+                        return f"LOW ({days} days)"
+                # Try start date
+                start_str = inv.get("confirmed_operation_start") or inv.get("investigation_start_date")
+                if start_str:
+                    from datetime import date
+                    start = date.fromisoformat(str(start_str))
+                    days = (date.today() - start).days
+                    if days >= 365:
+                        return f"EXTREME ({days} days confirmed — >1 year persistent operation)"
+                    elif days >= 90:
+                        return f"HIGH ({days} days confirmed)"
+                    return f"MEDIUM ({days} days confirmed)"
+        except Exception:
+            pass
+        return "UNKNOWN"
 
     def build_rating_card(self, finding: dict,
                           matched_attacks: List[AttackRecord],
@@ -528,11 +575,15 @@ class IntelligenceDB:
         for ef in enriched_findings:
             all_citations.update(ef.citations)
 
+        # FIX v2.1: persistence from config total_confirmed_days (506 days)
+        # not from profile ratings (which don't reflect investigation duration)
+        persistence_level = self._calc_persistence_level()
+
         return AttackerAssessment(
             matched_profile=matched_profile,
             automation_level=ratings.get("automation", "UNKNOWN"),
             sophistication_level=ratings.get("sophistication", "UNKNOWN"),
-            persistence_level=ratings.get("persistence", "UNKNOWN"),
+            persistence_level=persistence_level,
             skill_level=ratings.get("skill_level", "UNKNOWN"),
             likely_actor=ratings.get("likely_actor", "Unknown"),
             likely_devices=likely_device_names,
