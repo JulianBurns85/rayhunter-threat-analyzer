@@ -5,16 +5,60 @@ Cipher Downgrade Detector
 Detects null-cipher attacks (EEA0/EIA0) and 2G forced downgrades.
 
 Rules:
-  CRITICAL: SecurityModeCommand with EEA0 + EIA0 (full null cipher — no encryption or integrity)
+  CRITICAL: SecurityModeCommand with EEA0 + EIA0 (full null cipher)
   CRITICAL: RRC Connection Release with GERAN redirect (forced 2G downgrade)
-  HIGH:     SecurityModeCommand with EEA0 only (no encryption, but has integrity)
+  HIGH:     SecurityModeCommand with EEA0 only (no encryption, has integrity)
   HIGH:     SecurityModeCommand with EIA0 only (no integrity, has encryption)
-  MEDIUM:   GSM Cipher Mode Command (A5/0 = plaintext 2G)
-  MEDIUM:   SecurityModeCommand with weaker algorithm than previous session
+  MEDIUM:   GSM Cipher Mode Command with A5/0 (plaintext 2G)
+  HIGH:     SecurityModeCommand with no prior Authentication
+
+Fix history:
+  v2.1 (9 May 2026): Corrected false-positive EEA0 detection. Previous versions
+  fired on any event containing an EEA0 field, including UE capability
+  advertisements and NAS fields that coincidentally contained zero values.
+  tshark verification (April 11, 2026) confirmed ZERO actual EEA0
+  SecurityModeCommands across all M7350 dual-unit captures. All confirmed
+  SecurityModeCommands use EEA2/EIA2 (AES-128) — Harris Transparent Proxy mode.
+
+  The detector now ONLY fires on events where:
+  (a) msg_type is explicitly "Security Mode Command", AND
+  (b) cipher_alg field is explicitly "EEA0"
+  UE capability advertisements are excluded by checking for
+  "UECapability" in msg_type before matching cipher fields.
 """
 
 from typing import List, Dict
 from .base import BaseDetector, make_finding
+
+
+# Messages that legitimately contain EEA0 in capability fields
+# These are NOT cipher downgrade events — they are capability advertisements
+_CAPABILITY_MSG_TYPES = {
+    "UECapabilityInformation",
+    "UECapabilityEnquiry",
+    "UECapabilityInfo",
+    "RRCConnectionSetupComplete",  # may include UE capability
+    "AttachRequest",               # includes UE network capability
+}
+
+
+def _is_genuine_smc(event: dict) -> bool:
+    """
+    Return True only if this event is a genuine SecurityModeCommand
+    with an explicitly negotiated cipher algorithm.
+    Excludes UE capability advertisements that contain cipher capability fields.
+    """
+    msg_type = (event.get("msg_type") or "").strip()
+
+    # Must be explicitly a SecurityModeCommand
+    if "Security Mode Command" not in msg_type and msg_type not in ("Security Mode Command",):
+        return False
+
+    # Must not be a UE capability message
+    if any(cap in msg_type for cap in _CAPABILITY_MSG_TYPES):
+        return False
+
+    return True
 
 
 class CipherDowngradeDetector(BaseDetector):
@@ -24,39 +68,54 @@ class CipherDowngradeDetector(BaseDetector):
     def analyze(self, events: List[Dict]) -> List[Dict]:
         findings = []
 
-        # Promote threat signals → field values for events missing explicit fields
+        # ── Pre-process: promote threat signals to field values ────────
+        # Only promote to cipher fields when the source is a genuine SMC context
         for e in events:
+            threats    = e.get("threats", [])
             alerts_str = " ".join(str(a).lower() for a in e.get("harness_alerts", []))
-            raw_str = str(e.get("raw", {})).lower()
-            threats = e.get("threats", [])
-            combined = alerts_str + " " + raw_str
+            raw_str    = str(e.get("raw", {})).lower()
+            combined   = alerts_str + " " + raw_str
+
             if "NULL_CIPHER" in threats and not e.get("cipher_alg"):
-                e["cipher_alg"] = "EEA0"
-                if not e.get("msg_type"):
-                    e["msg_type"] = "Security Mode Command"
+                # Only promote if msg_type is already SMC — don't assume
+                if "Security Mode Command" in str(e.get("msg_type", "")):
+                    e["cipher_alg"]    = "EEA0"
+                    e["integrity_alg"] = "EIA0"
+
             if "GERAN_REDIRECT" in threats or "SIB_DOWNGRADE" in threats:
                 e["has_geran_redirect"] = True
+
             if "PROSE_TRACKING" in threats:
                 e["has_prose"] = True
+
             if "HANDOVER_INJECT" in threats:
                 e["has_mobility_control"] = True
-            if "eea0" in combined and not e.get("cipher_alg"):
-                e["cipher_alg"] = "EEA0"
-            if "eia0" in combined and not e.get("integrity_alg"):
-                e["integrity_alg"] = "EIA0"
-            if ("null cipher" in combined or "eea0" in combined) and not e.get("msg_type"):
-                e["msg_type"] = "Security Mode Command"
-            if ("geran" in combined or "2g redirect" in combined or "downgrade" in combined) and not e.get("has_geran_redirect"):
+
+            # Only promote eea0/eia0 from raw strings when msg_type already
+            # indicates a SecurityModeCommand — prevents false positives from
+            # UE capability advertisements
+            if "Security Mode Command" in str(e.get("msg_type", "")):
+                if "eea0" in combined and not e.get("cipher_alg"):
+                    e["cipher_alg"] = "EEA0"
+                if "eia0" in combined and not e.get("integrity_alg"):
+                    e["integrity_alg"] = "EIA0"
+
+            if "geran" in combined or "2g redirect" in combined:
                 e["has_geran_redirect"] = True
-            if "proximity" in combined and not e.get("has_prose"):
+
+            if "proximity" in combined:
                 e["has_prose"] = True
-            if "handover" in combined and not e.get("has_mobility_control"):
+
+            if "handover" in combined:
                 e["has_mobility_control"] = True
 
         # ── Rule 1: Full null cipher (EEA0 + EIA0) ────────────────────
+        # Only match genuine SecurityModeCommand events — not capability ads
         full_null = [
             e for e in events
-            if e.get("cipher_alg") == "EEA0" and e.get("integrity_alg") == "EIA0"
+            if _is_genuine_smc(e)
+            and e.get("cipher_alg") == "EEA0"
+            and e.get("integrity_alg") == "EIA0"
         ]
         if full_null:
             findings.append(make_finding(
@@ -66,9 +125,13 @@ class CipherDowngradeDetector(BaseDetector):
                     f"{len(full_null)} Security Mode Command(s) negotiated with "
                     f"EEA0 (no encryption) AND EIA0 (no integrity protection). "
                     f"This violates 3GPP TS 33.401 §5.1.3.2 which prohibits EIA0 "
-                    f"in normal operation. Your traffic is transmitted in PLAINTEXT "
-                    f"with no tamper detection. This is the signature of a Man-in-the-Middle "
-                    f"attack by a rogue base station."
+                    f"in normal operation. Traffic is transmitted in PLAINTEXT with "
+                    f"no tamper detection. This is the signature of a Man-in-the-Middle "
+                    f"attack by a rogue base station.\n\n"
+                    f"NOTE: If running against M7350 dual-unit captures from the "
+                    f"Cranbourne East investigation (January 2026 onwards), zero EEA0 "
+                    f"events are expected — Harris Transparent Proxy mode uses EEA2/EIA2. "
+                    f"Verify against raw tshark output before submitting."
                 ),
                 severity="CRITICAL",
                 confidence="CONFIRMED",
@@ -77,16 +140,20 @@ class CipherDowngradeDetector(BaseDetector):
                 events=full_null,
                 hardware_hint=(
                     "Rogue eNodeB / IMSI catcher with active MitM capability "
-                    "(Stingray, Cobham UMTS/LTE, Septier IMSI Catcher, or similar)"
+                    "(Stingray, Cobham UMTS/LTE, Septier IMSI Catcher, or similar). "
+                    "NOTE: Harris commercial devices in Transparent Proxy mode do NOT "
+                    "produce EEA0 — if this fires on Cranbourne East data it is likely "
+                    "a false positive from UE capability fields. Verify with tshark."
                 ),
                 action=(
-                    "IMMEDIATE ACTION REQUIRED:\n"
-                    "1. This confirms an active man-in-the-middle attack.\n"
-                    "2. Preserve QMDL files — the SecurityModeCommand is logged with timestamp.\n"
-                    "3. Cross-reference timestamps with known rogue cell activity.\n"
-                    "4. Cite 3GPP TS 33.401 §5.1.3.2 in ACMA complaint.\n"
-                    "5. Include in Telstra Duty of Care claim — network must reject EIA0.\n"
-                    "6. Submit to AFP/ACORN with SecurityModeCommand decoded packet as exhibit."
+                    "VERIFY FIRST: Run tshark -r <file> -Y "
+                    "'lte_rrc.SecurityModeCommand_element' -T fields "
+                    "-e lte_rrc.cipheringAlgorithm to confirm EEA0 in actual SMC.\n\n"
+                    "If confirmed:\n"
+                    "1. Preserve QMDL files — the SecurityModeCommand is logged with timestamp.\n"
+                    "2. Cross-reference timestamps with known rogue cell activity.\n"
+                    "3. Cite 3GPP TS 33.401 §5.1.3.2 in ACMA complaint.\n"
+                    "4. Submit to AFP/ACORN with SecurityModeCommand decoded packet as exhibit."
                 ),
                 spec_ref="3GPP TS 33.401 §5.1.3.2, TS 24.301 §5.4.3",
             ))
@@ -94,13 +161,14 @@ class CipherDowngradeDetector(BaseDetector):
         # ── Rule 2: EEA0 only (no encryption, has integrity) ──────────
         eea0_only = [
             e for e in events
-            if e.get("cipher_alg") == "EEA0"
+            if _is_genuine_smc(e)
+            and e.get("cipher_alg") == "EEA0"
             and e.get("integrity_alg") not in ("EIA0", None)
         ]
         if eea0_only:
             findings.append(make_finding(
                 detector=self.name,
-                title="Null Encryption Negotiated (EEA0)",
+                title="Null Encryption Negotiated (EEA0) in SecurityModeCommand",
                 description=(
                     f"{len(eea0_only)} Security Mode Command(s) negotiated with EEA0 "
                     f"(null encryption). Traffic is UNENCRYPTED but integrity-protected. "
@@ -123,7 +191,8 @@ class CipherDowngradeDetector(BaseDetector):
         # ── Rule 3: EIA0 only (no integrity, has encryption) ──────────
         eia0_only = [
             e for e in events
-            if e.get("integrity_alg") == "EIA0"
+            if _is_genuine_smc(e)
+            and e.get("integrity_alg") == "EIA0"
             and e.get("cipher_alg") not in ("EEA0", None)
         ]
         if eia0_only:
@@ -151,14 +220,11 @@ class CipherDowngradeDetector(BaseDetector):
         # ── Rule 4: Forced 2G downgrade (GERAN redirect) ──────────────
         geran_redirect = [
             e for e in events
-            if e.get("has_geran_redirect") or
-            "geran" in str(e.get("msg_subtype", "")).lower() or
-            "geran" in " ".join(str(a) for a in e.get("harness_alerts", [])).lower()
+            if e.get("has_geran_redirect")
+            or "geran" in str(e.get("msg_subtype", "")).lower()
         ]
-        rrc_release = self.filter_by_type(events, ["RRC Connection Release"])
-        geran_release = [
-            e for e in rrc_release if e.get("has_geran_redirect")
-        ] or geran_redirect
+        rrc_release   = self.filter_by_type(events, ["RRC Connection Release"])
+        geran_release = [e for e in rrc_release if e.get("has_geran_redirect")] or geran_redirect
 
         if geran_release:
             findings.append(make_finding(
@@ -166,36 +232,33 @@ class CipherDowngradeDetector(BaseDetector):
                 title="Forced 2G Downgrade (GERAN Redirect in RRC Release)",
                 description=(
                     f"{len(geran_release)} RRC Connection Release message(s) contained "
-                    f"a GERAN (GSM/2G) redirected carrier. This forces your device to "
-                    f"drop to 2G where GSM's A5/1 cipher (or A5/0 — no cipher) is trivially "
-                    f"broken. This is a classic IMSI catcher downgrade attack to enable "
-                    f"passive interception."
+                    f"a GERAN (GSM/2G) redirected carrier. This forces the device to drop "
+                    f"to 2G where GSM's A5/1 cipher (or A5/0 — no cipher) is trivially "
+                    f"broken. This is a classic IMSI catcher downgrade attack."
                 ),
                 severity="CRITICAL",
                 confidence="CONFIRMED",
-                technique="LTE→2G Forced Downgrade via GERAN Redirect (redirectedCarrierInfo-GERAN)",
+                technique="LTE→2G Forced Downgrade via GERAN Redirect",
                 evidence=self._fmt(geran_release),
                 events=geran_release,
                 hardware_hint=(
                     "Rogue LTE eNodeB with 2G fallback — forces victim to 2G "
-                    "where a paired GSM IMSI catcher operates (common dual-layer attack)"
+                    "where a paired GSM IMSI catcher operates"
                 ),
                 action=(
                     "1. Document the RRC Connection Release packet with GERAN IEs.\n"
-                    "2. Note the target ARFCN in the redirect — correlate with GSM scan data.\n"
+                    "2. Note the target ARFCN — correlate with GSM scan data.\n"
                     "3. This is a two-stage attack: LTE rogue → forced 2G → passive intercept.\n"
-                    "4. Cite TS 36.331 §5.3.12 (cell reselection) in evidence.\n"
-                    "5. Alert: Do not use voice calls or SMS while this is active."
+                    "4. Alert: Do not use voice calls or SMS while this is active."
                 ),
                 spec_ref="3GPP TS 36.331 §5.3.12, TS 33.401 §C.1",
             ))
 
-        # ── Rule 5: GSM Cipher Mode Command with A5/0 ─────────────────
+        # ── Rule 5: GSM A5/0 on 2G channel ───────────────────────────
         gsm_cipher = [
             e for e in events
             if e.get("layer") in ("GSM/2G", "NAS")
-            and (e.get("cipher_alg") in ("A5/0", "EEA0")
-                 or "cipher mode" in str(e.get("msg_type", "")).lower())
+            and e.get("cipher_alg") in ("A5/0", "EEA0")
             and e.get("has_geran_redirect")
         ]
         if gsm_cipher:
@@ -204,7 +267,7 @@ class CipherDowngradeDetector(BaseDetector):
                 title="GSM Null-Cipher (A5/0) on 2G Channel",
                 description=(
                     f"{len(gsm_cipher)} GSM Cipher Mode Command(s) with A5/0 (no cipher). "
-                    f"After being forced to 2G, your device was assigned zero encryption. "
+                    f"After being forced to 2G, the device was assigned zero encryption. "
                     f"All 2G voice and data traffic is transmitted in clear plaintext."
                 ),
                 severity="CRITICAL",
@@ -221,9 +284,11 @@ class CipherDowngradeDetector(BaseDetector):
                 spec_ref="3GPP TS 43.020 §3.3 (A5/0)",
             ))
 
-        # ── Rule 6: Security Mode Command with no prior Auth ──────────
-        smc_events = self.filter_by_type(events, ["Security Mode Command"])
-        auth_events = self.filter_by_type(events, ["Authentication Request", "Authentication Response"])
+        # ── Rule 6: SecurityModeCommand with no prior Auth ────────────
+        smc_events  = self.filter_by_type(events, ["Security Mode Command"])
+        auth_events = self.filter_by_type(
+            events, ["Authentication Request", "Authentication Response"]
+        )
         if smc_events and not auth_events:
             findings.append(make_finding(
                 detector=self.name,
@@ -232,7 +297,7 @@ class CipherDowngradeDetector(BaseDetector):
                     f"Security Mode Command observed with no preceding Authentication "
                     f"Request/Response sequence. Legitimate LTE authentication must precede "
                     f"security mode setup. This indicates a rogue device skipping authentication "
-                    f"to negotiate weak ciphers with an unauthenticated identity."
+                    f"to negotiate cipher parameters with an unauthenticated identity."
                 ),
                 severity="HIGH",
                 confidence="PROBABLE",
@@ -241,8 +306,8 @@ class CipherDowngradeDetector(BaseDetector):
                 events=smc_events,
                 hardware_hint="Rogue eNodeB bypassing mutual authentication",
                 action=(
-                    "Cross-reference with Identity Request events. This sequence "
-                    "(no auth → SMC) combined with EEA0 is definitive IMSI catcher evidence."
+                    "Cross-reference with Identity Request events. "
+                    "No-auth → SMC combined with EEA0 is definitive IMSI catcher evidence."
                 ),
                 spec_ref="3GPP TS 33.401 §8.2, TS 24.301 §5.4.3",
             ))
@@ -252,12 +317,10 @@ class CipherDowngradeDetector(BaseDetector):
     def _fmt(self, events: List[Dict]) -> List[str]:
         lines = []
         for e in events[:6]:
-            ts = e.get("timestamp") or e.get("raw", {}).get("packet_timestamp", "?")
-            msg = e.get("msg_type", "?")
-            cipher = e.get("cipher_alg", "?")
+            ts        = e.get("timestamp") or e.get("raw", {}).get("packet_timestamp", "?")
+            msg       = e.get("msg_type", "?")
+            cipher    = e.get("cipher_alg", "?")
             integrity = e.get("integrity_alg", "?")
-            src = e.get("source_file", "")
-            lines.append(
-                f"[{ts}] {msg} | EEA={cipher} EIA={integrity} ({src})"
-            )
+            src       = e.get("source_file", "")
+            lines.append(f"[{ts}] {msg} | EEA={cipher} EIA={integrity} ({src})")
         return lines

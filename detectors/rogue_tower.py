@@ -265,6 +265,8 @@ class RogueTowerDetector(BaseDetector):
             earfcn   = ev.get("earfcn")
             tac      = ev.get("tac")
             rsrp     = ev.get("rsrp")
+            ev_mcc  = ev.get("mcc") or self.mcc
+            ev_mnc  = ev.get("mnc") or self.mnc
             # FIX v2.1: read per-cell MCC/MNC from event dict (set by ndjson_parser
             # from SIB1 PLMN field). Previously always used session default (001).
             ev_mcc  = ev.get("mcc") or self.mcc
@@ -371,3 +373,4 @@ class RogueTowerDetector(BaseDetector):
             first = events[0]
             lines.append(f"First seen: {first.get('timestamp','?')} in {first.get('source_file','?')}")
         return lines
+
