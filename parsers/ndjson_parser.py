@@ -13,7 +13,7 @@ Confirmed Rayhunter v0.10.x NDJSON schema (from live capture analysis):
         {"name": "Null Cipher", ...},
         {"name": "NAS Null Cipher Requested", ...},
         {"name": "Incomplete SIB", ...},
-        {"name": "Test Analyzer", ...},          ← index 6, fires on every SIB1 (noisy)
+        {"name": "Test Analyzer", ...},          <- index 6, fires on every SIB1 (noisy)
         {"name": "Diagnostic detector...", ...}
       ],
       "rayhunter": {"arch": "...", "rayhunter_version": "...", "system_os": "..."},
@@ -25,25 +25,34 @@ Confirmed Rayhunter v0.10.x NDJSON schema (from live capture analysis):
       "packet_timestamp": "2026-03-09T01:48:02.223Z",
       "skipped_message_reason": null,
       "events": [
-        null,           ← index 0: "Identity..." analyzer did NOT fire
-        null,           ← index 1: "Connection Release..." did NOT fire
-        null,           ← index 2: "LTE SIB 6/7..." did NOT fire
-        null,           ← index 3: "Null Cipher" did NOT fire
-        null,           ← index 4: "NAS Null Cipher" did NOT fire
-        null,           ← index 5: "Incomplete SIB" did NOT fire
-        {               ← index 6: "Test Analyzer" FIRED
+        null,           <- index 0: "Identity..." analyzer did NOT fire
+        null,           <- index 1: "Connection Release..." did NOT fire
+        null,           <- index 2: "LTE SIB 6/7..." did NOT fire
+        null,           <- index 3: "Null Cipher" did NOT fire
+        null,           <- index 4: "NAS Null Cipher" did NOT fire
+        null,           <- index 5: "Incomplete SIB" did NOT fire
+        {               <- index 6: "Test Analyzer" FIRED
           "event_type": "Low",
           "message": "SIB1 received CID: 135836191, TAC: 12385, PLMN: 505-01 (packet 7415)"
         },
-        null            ← index 7: "Diagnostic detector" did NOT fire
+        null            <- index 7: "Diagnostic detector" did NOT fire
       ]
     }
 
 KEY FACTS:
   - event_type = severity ("Low" / "Medium" / "High" / "Critical")
   - Threat identity comes from the array INDEX matching analyzers[] from header
-  - SIB1 messages encode cell_id and TAC in the message string → parsed here
-  - "Test Analyzer" (index 6) fires on every SIB1 — useful for cell extraction but noisy
+  - SIB1 messages encode cell_id and TAC in the message string -> parsed here
+  - "Test Analyzer" (index 6) fires on every SIB1 - useful for cell extraction but noisy
+
+Fix history:
+  v2.1 (9 May 2026):
+  - MNC bug fixed: previously ev["mnc"] always defaulted to session-level MNC (001)
+    even when SIB1 PLMN field showed 505-03 (Vodafone). Fix: store per-cell MNC
+    separately from session MNC so cell summary uses the correct carrier.
+  - IMEISV identity type: added detection from message text when analyzer fires
+    on IMEI/IMEISV request. Previously all identity requests defaulted to IMSI.
+  - Added plmn field to event dict for direct PLMN string access by reporter.
 """
 
 import json
@@ -52,9 +61,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 
-# ── Analyzer index → threat mapping ──────────────────────────────────
-# Keyed by lowercase substring of analyzer name.
-# Maps to field updates when that analyzer fires.
+# ── Analyzer index -> threat mapping ──────────────────────────────────
 ANALYZER_THREAT_MAP = {
     "identity (imsi or imei)": {
         "msg_type": "Identity Request",
@@ -102,7 +109,6 @@ ANALYZER_THREAT_MAP = {
         "threat": "NULL_CIPHER",
     },
     "diagnostic detector": {
-        # Noisy but useful — contains IMSI exposure context
         "threat": "IMSI_EXPOSURE_CONTEXT",
     },
     "imsi exposure": {
@@ -125,7 +131,6 @@ ANALYZER_THREAT_MAP = {
         "msg_type": "Paging",
         "threat": "PAGING",
     },
-    # "Test Analyzer" and "Incomplete SIB" → just extract cell data, no threat flag
 }
 
 # ── Severity mapping ──────────────────────────────────────────────────
@@ -144,7 +149,7 @@ SIB1_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-# ── NAS Message Type lookup (used by qmdl_parser) ────────────────────
+# ── NAS Message Type lookup ───────────────────────────────────────────
 NAS_MSG_TYPES = {
     0x41: "Attach Request",
     0x42: "Attach Accept",
@@ -182,12 +187,17 @@ NAS_MSG_TYPES = {
     0xE2: "PDN Disconnect Reject",
 }
 
+# ── Identity type patterns ────────────────────────────────────────────
+# Used to extract IMEISV vs IMSI vs IMEI from message text
+IMEISV_PATTERNS = re.compile(r'\b(imeisv|imei.?sv|software.?version|device.?fingerprint)\b', re.I)
+IMEI_PATTERNS   = re.compile(r'\b(imei)\b(?!.?sv)', re.I)
+
+
 class NdjsonParser:
     def __init__(self, cfg: dict):
         self.cfg = cfg
-        self.mcc = cfg.get("network", {}).get("mcc", "505")
-        self.mnc = cfg.get("network", {}).get("mnc", "001")
-        # Per-file analyzer list, populated from header line
+        self.session_mcc = cfg.get("network", {}).get("mcc", "505")
+        self.session_mnc = cfg.get("network", {}).get("mnc", "001")
         self._analyzers: List[str] = []
 
     def parse(self, filepath: str) -> List[Dict]:
@@ -208,8 +218,8 @@ class NdjsonParser:
                     if raw is None:
                         continue
 
-                # Line 1: header with analyzer definitions
-                if not isinstance(raw, dict): continue
+                if not isinstance(raw, dict):
+                    continue
                 if "analyzers" in raw:
                     self._parse_header(raw)
                     continue
@@ -232,24 +242,35 @@ class NdjsonParser:
     def _normalise(self, raw: dict, source_file: str, lineno: int) -> Optional[Dict]:
         """Convert a Rayhunter packet line into a normalised event dict."""
         ev = {
-            "source_file": Path(source_file).name,
-            "source_type": "ndjson",
-            "line": lineno,
-            "raw": raw,
-            # Defaults
-            "timestamp": None,
-            "cell_id": None, "earfcn": None,
-            "mcc": self.mcc, "mnc": self.mnc,
-            "tac": None, "pci": None, "rsrp": None, "rat": "LTE",
-            "msg_type": None, "msg_subtype": None, "layer": "NAS",
-            "cipher_alg": None, "integrity_alg": None,
+            "source_file":  Path(source_file).name,
+            "source_type":  "ndjson",
+            "line":         lineno,
+            "raw":          raw,
+            # Defaults — session-level MCC/MNC used as fallback only
+            "timestamp":    None,
+            "cell_id":      None,
+            "earfcn":       None,
+            "mcc":          self.session_mcc,
+            "mnc":          self.session_mnc,   # FIX: overwritten per-cell below
+            "plmn":         None,               # FIX: explicit PLMN string from SIB1
+            "tac":          None,
+            "pci":          None,
+            "rsrp":         None,
+            "rat":          "LTE",
+            "msg_type":     None,
+            "msg_subtype":  None,
+            "layer":        "NAS",
+            "cipher_alg":   None,
+            "integrity_alg": None,
             "identity_type": None,
-            "has_mobility_control": False, "has_geran_redirect": False,
-            "has_measreport": False, "has_prose": False,
-            "paging_type": None,
-            "harness_alerts": [],
-            "rayhunter_severity": None,
-            "threats": [],
+            "has_mobility_control": False,
+            "has_geran_redirect":   False,
+            "has_measreport":       False,
+            "has_prose":            False,
+            "paging_type":          None,
+            "harness_alerts":       [],
+            "rayhunter_severity":   None,
+            "threats":              [],
         }
 
         # ── Timestamp ─────────────────────────────────────────────────
@@ -260,8 +281,6 @@ class NdjsonParser:
         )
 
         # ── Process events[] array ─────────────────────────────────────
-        # Each position maps to the analyzer at the same index in _analyzers[].
-        # event_type = severity level. message = human description.
         rayhunter_events = raw.get("events") or []
         harness_alerts = []
 
@@ -281,12 +300,10 @@ class NdjsonParser:
             if sev_rank.get(severity, 0) > current_rank:
                 ev["rayhunter_severity"] = severity
 
-            # Identify which analyzer fired using the header index
+            # Identify which analyzer fired
             analyzer_name = ""
             if idx < len(self._analyzers):
                 analyzer_name = self._analyzers[idx]
-
-            # Fallback: try to identify from message content
             if not analyzer_name:
                 analyzer_name = message.lower()
 
@@ -305,21 +322,43 @@ class NdjsonParser:
                     matched = True
                     break
 
-            # Extract cell data from SIB1 messages (Test Analyzer fires on every SIB1)
+            # ── FIX: Detect IMEISV vs IMSI from message content ──────
+            # If analyzer fired on an identity request, check message for type
+            if ev.get("msg_type") == "Identity Request" or "identity" in analyzer_name:
+                msg_lower = message.lower()
+                if IMEISV_PATTERNS.search(msg_lower):
+                    ev["identity_type"] = "IMEISV"
+                elif IMEI_PATTERNS.search(msg_lower):
+                    ev["identity_type"] = "IMEI"
+                # else leave as IMSI (default from ANALYZER_THREAT_MAP)
+
+            # ── Extract cell data from SIB1 messages ─────────────────
             sib1_match = SIB1_PATTERN.search(message)
             if sib1_match:
                 ev["cell_id"] = ev["cell_id"] or sib1_match.group(1)
                 ev["tac"]     = ev["tac"]     or sib1_match.group(2)
-                plmn = sib1_match.group(3)  # "505-01" → MCC=505 MNC=01
-                if "-" in plmn:
-                    parts = plmn.split("-")
-                    ev["mcc"] = parts[0]
-                    ev["mnc"] = parts[1].zfill(2) if len(parts) > 1 else self.mnc
-                # SIB1 events alone are not threats — skip harness alert unless higher severity
-                if severity == "LOW" and not matched:
-                    continue  # Skip adding to harness_alerts for Low SIB1 noise
+                plmn_str = sib1_match.group(3)  # e.g. "505-01" or "505-03"
+                ev["plmn"] = plmn_str
 
-            # Build harness alert string (skip Low-severity Test Analyzer SIB1 noise)
+                # ── FIX: Per-cell MNC — overwrite session default ─────
+                # Previous bug: ev["mnc"] was always session_mnc (001) even
+                # for Vodafone cells (505-03). Now reads MNC from SIB1 PLMN.
+                if "-" in plmn_str:
+                    parts = plmn_str.split("-")
+                    if len(parts) >= 2:
+                        ev["mcc"] = parts[0]
+                        ev["mnc"] = parts[1].zfill(2)
+                        # Pad to 3 digits if needed (some PLMNs use 3-digit MNC)
+                        if len(parts[1]) == 2:
+                            ev["mnc"] = parts[1].zfill(2)
+                        else:
+                            ev["mnc"] = parts[1]
+
+                # Low-severity SIB1 from Test Analyzer = cell data only, no alert
+                if severity == "LOW" and not matched:
+                    continue
+
+            # Build harness alert
             is_sib1_noise = (
                 "sib1 received" in message.lower()
                 and severity == "LOW"
@@ -330,31 +369,34 @@ class NdjsonParser:
 
         ev["harness_alerts"] = harness_alerts
 
-        # ── Also scan message text for additional cipher/identity signals ──
+        # ── Secondary scan of all messages for cipher/identity signals ─
         all_messages = " ".join(
             str(e.get("message", "")) for e in rayhunter_events if e
         ).lower()
+
         if "eea0" in all_messages or "null cipher" in all_messages:
             ev["cipher_alg"] = ev["cipher_alg"] or "EEA0"
         if "eia0" in all_messages:
             ev["integrity_alg"] = ev["integrity_alg"] or "EIA0"
-        if "imsi" in all_messages and not ev["identity_type"]:
+        if "imeisv" in all_messages and ev.get("identity_type") in (None, "IMSI"):
+            ev["identity_type"] = "IMEISV"
+        elif "imei" in all_messages and "imeisv" not in all_messages and ev.get("identity_type") in (None,):
+            ev["identity_type"] = "IMEI"
+        elif "imsi" in all_messages and not ev.get("identity_type"):
             ev["identity_type"] = "IMSI"
-        if "imei" in all_messages and not ev["identity_type"]:
-            ev["identity_type"] = "IMEI/IMEISV"
         if "geran" in all_messages or "2g" in all_messages:
             ev["has_geran_redirect"] = True
 
-        # ── skipped_message_reason ────────────────────────────────────
+        # ── skipped_message_reason ─────────────────────────────────────
         skip_reason = str(raw.get("skipped_message_reason") or "")
         if skip_reason and "EncryptedNASMessage" not in skip_reason:
             ev["harness_alerts"].append(f"[INFO] Skip: {skip_reason[:100]}")
 
-        # ── Paging type ───────────────────────────────────────────────
+        # ── Paging type ────────────────────────────────────────────────
         if ev["msg_type"] == "Paging":
             ev["paging_type"] = "IMSI" if ev.get("identity_type") == "IMSI" else "S-TMSI"
 
-        # ── Only keep events with at least one useful signal ──────────
+        # ── Only keep events with at least one useful signal ───────────
         has_signal = any([
             ev["msg_type"],
             ev["cipher_alg"],
@@ -363,7 +405,7 @@ class NdjsonParser:
             ev["has_prose"],
             ev["has_mobility_control"],
             ev["harness_alerts"],
-            ev["cell_id"],   # SIB1-extracted cell data
+            ev["cell_id"],
         ])
         return ev if has_signal else None
 

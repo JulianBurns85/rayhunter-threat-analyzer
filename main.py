@@ -157,7 +157,11 @@ def run_analysis(files: dict, cfg: dict, verbose: bool) -> dict:
         all_findings.extend(findings)
 
     # ── Hardware Fingerprinting ───────────────────────────────────────
-    fingerprinter = HardwareFingerprinter(cfg.get("intelligence", {}).get("db_path", "intelligence/db"))
+    # v2.1: pass cfg for persistence (506 days) and T1 signature (610.6s)
+    fingerprinter = HardwareFingerprinter(
+        cfg.get("intelligence", {}).get("db_path", "intelligence/db"),
+        cfg=cfg,
+    )
     fingerprints = fingerprinter.analyze(all_events, all_findings)
     if fingerprints:
         print(f"  [HWFP] {len(fingerprints)} hardware candidate(s) identified")
@@ -438,7 +442,11 @@ def run_analysis(files: dict, cfg: dict, verbose: bool) -> dict:
         all_findings.extend(findings)
 
     # ── Hardware Fingerprinting ───────────────────────────────────────
-    fingerprinter = HardwareFingerprinter(cfg.get("intelligence", {}).get("db_path", "intelligence/db"))
+    # v2.1: pass cfg for persistence (506 days) and T1 signature (610.6s)
+    fingerprinter = HardwareFingerprinter(
+        cfg.get("intelligence", {}).get("db_path", "intelligence/db"),
+        cfg=cfg,
+    )
     fingerprints = fingerprinter.analyze(all_events, all_findings)
     if fingerprints:
         print(f"  [HWFP] {len(fingerprints)} hardware candidate(s) identified")
