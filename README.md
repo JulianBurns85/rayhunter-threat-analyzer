@@ -340,4 +340,4 @@ MIT License — see [LICENSE](LICENSE)
 
 *Built with a Raspberry Pi 5, two TP-Link hotspots, an RTL-SDR, 3 LLM's lot of late nights, and possibly a couple of beers*
 *"For Steve..." - Hunt the Hunters*
-*Julian Burns — Cranbourne East, VIC, Australia — 2026*
+*-Julian Burns — Cranbourne East, VIC, Australia — 2026*
