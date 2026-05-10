@@ -328,7 +328,8 @@ class HeuristicScorerDetector:
                 if v is not None:
                     try:
                         n = int(v)
-                        if 2 <= n <= _MAX_SANE_COUNT:\r\n                            harvest_count = max(harvest_count, n)
+                        if 2 <= n <= _MAX_SANE_COUNT:
+                            harvest_count = max(harvest_count, n)
                     except (ValueError, TypeError):
                         pass
 
