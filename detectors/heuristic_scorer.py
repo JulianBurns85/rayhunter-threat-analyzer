@@ -328,9 +328,7 @@ class HeuristicScorerDetector:
                 if v is not None:
                     try:
                         n = int(v)
-                        if 2 <= n <= _MAX_SANE_COUNT:
-                            harvest_count = max(harvest_count, n)
-                            break  # Found a valid integer count -- stop here
+                        if 2 <= n <= _MAX_SANE_COUNT:\r\n                            harvest_count = max(harvest_count, n)
                     except (ValueError, TypeError):
                         pass
 
@@ -861,3 +859,4 @@ class HeuristicScorerDetector:
             evidence="No anomalous LAC change patterns detected in this batch.",
             academic_source="IMSI Catchers Survey 2015 §4.1.10",
         )
+
