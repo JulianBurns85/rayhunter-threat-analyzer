@@ -43,7 +43,7 @@ YAICD_WEIGHTS: Dict[str, float] = {
 YAICD_THRESHOLD = 2.6
 
 # Maximum plausible event count -- anything above this is a filename / timestamp
-_MAX_SANE_COUNT = 10_000
+_MAX_SANE_COUNT = 1_000_000
 
 
 def _get(obj: Any, *keys: str, default: Any = None) -> Any:
