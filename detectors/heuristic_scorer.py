@@ -316,37 +316,26 @@ class HeuristicScorerDetector:
         ctx["imeisv_findings"] = imsi_f
         ctx["imeisv_present"]  = bool(imsi_f)
 
-        # Count extraction -- explicit fields first, then bounded regex
+        # Count extraction -- integer fields ONLY, no string parsing.
+        # String parsing caused year numbers (e.g. 2026 from timestamps)
+        # to be read as event counts. The detector findings carry an
+        # explicit event_count integer field -- use that directly.
         harvest_count = 0
         for f in imsi_f:
-            # 1. Explicit structured count fields (most reliable)
-            for k in ("count", "event_count", "total", "request_count",
+            for k in ("event_count", "count", "total", "request_count",
                       "identity_count", "num_events", "num_requests"):
                 v = _get(f, k)
-                if v:
+                if v is not None:
                     try:
                         n = int(v)
                         if 2 <= n <= _MAX_SANE_COUNT:
                             harvest_count = max(harvest_count, n)
+                            break  # Found a valid integer count -- stop here
                     except (ValueError, TypeError):
                         pass
 
-            # 2. Specific text fields (not the full finding repr)
-            for k in ("message", "description", "detail", "evidence",
-                      "summary", "title"):
-                v = _get(f, k)
-                if v:
-                    n = _extract_count(str(v))
-                    harvest_count = max(harvest_count, n)
-
-        # 3. Fall back to full string ONLY if we still have nothing
-        if harvest_count == 0:
-            for f in imsi_f:
-                n = _extract_count(_str(f))
-                harvest_count = max(harvest_count, n)
-
-        # If findings exist but count is still 0, floor at 2
-        # (presence of finding = at least 1 event, detector threshold is 2)
+        # Floor at 2 if findings exist but no count field found
+        # (finding presence = detector already confirmed >= threshold)
         if ctx["imeisv_present"] and harvest_count == 0:
             harvest_count = 2
 
@@ -437,6 +426,13 @@ class HeuristicScorerDetector:
                     break
                 except (ValueError, TypeError, OSError):
                     pass
+
+        # Filter out epoch-zero and pre-2020 timestamps.
+        # QMDL files with malformed time fields produce 1970-01-01
+        # timestamps which cause wildly wrong persistence calculations.
+        # Unix timestamp for 2020-01-01 = 1577836800
+        MIN_VALID_TS = 1_577_836_800.0  # 2020-01-01 UTC
+        timestamps = [t for t in timestamps if t >= MIN_VALID_TS]
 
         if len(timestamps) >= 2:
             span = (max(timestamps) - min(timestamps)) / 86400.0
