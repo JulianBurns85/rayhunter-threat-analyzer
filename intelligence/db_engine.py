@@ -154,19 +154,48 @@ class IntelligenceDB:
         count = 0
         for yaml_file in sorted(attack_dir.glob("*.yaml")):
             try:
-                with open(yaml_file) as f:
-                    records = yaml.safe_load(f) or []
+                with open(yaml_file, encoding="utf-8") as f:
+                    raw = yaml.safe_load(f) or {}
+                # Handle both formats:
+                # Format A: list of {id, name, category, ...} records
+                # Format B: document with {title, attack_taxonomy, ...} structure
+                if isinstance(raw, list):
+                    records = raw
+                elif isinstance(raw, dict):
+                    # Check if it's a document-format YAML
+                    if "attack_taxonomy" in raw or "title" in raw:
+                        # Build a single AttackRecord from the document
+                        doc_id = yaml_file.stem
+                        rec = {
+                            "id": doc_id,
+                            "name": raw.get("title", doc_id),
+                            "category": "imsi_catcher_technique",
+                            "severity": {"score": 7, "level": "HIGH", "rationale": ""},
+                            "description": raw.get("title", ""),
+                            "detection_signature": {},
+                            "automation": {},
+                            "skill_required": "MEDIUM",
+                            "compatible_devices": [],
+                            "sources": [raw.get("url", "")],
+                            "generation": ["LTE"],
+                            "standard_ref": "",
+                        }
+                        records = [rec]
+                    else:
+                        records = [raw]
+                else:
+                    records = []
                 for rec in records:
                     if not isinstance(rec, dict):
                         continue
                     attack = AttackRecord(
-                        id=rec.get("id", ""),
-                        name=rec.get("name", ""),
-                        category=rec.get("category", ""),
-                        severity_score=rec.get("severity", {}).get("score", 5),
-                        severity_level=rec.get("severity", {}).get("level", "MEDIUM"),
-                        severity_rationale=rec.get("severity", {}).get("rationale", ""),
-                        description=rec.get("description", ""),
+                        id=(rec.get("id") or rec.get("attack_id") or rec.get("title") or yaml_file.stem),
+                        name=rec.get("name", rec.get("title", yaml_file.stem)),
+                        category=rec.get("category", "imsi_catcher_technique"),
+                        severity_score=rec.get("severity", {}).get("score", 5) if isinstance(rec.get("severity"), dict) else 5,
+                        severity_level=rec.get("severity", {}).get("level", "MEDIUM") if isinstance(rec.get("severity"), dict) else "MEDIUM",
+                        severity_rationale=rec.get("severity", {}).get("rationale", "") if isinstance(rec.get("severity"), dict) else "",
+                        description=rec.get("description", rec.get("title", "")),
                         detection_signature=rec.get("detection_signature", {}),
                         automation=rec.get("automation", {}),
                         skill_required=rec.get("skill_required", "UNKNOWN"),
@@ -193,24 +222,49 @@ class IntelligenceDB:
             return 0
         for yaml_file in sorted(device_dir.glob("*.yaml")):
             try:
-                with open(yaml_file) as f:
-                    records = yaml.safe_load(f) or []
+                with open(yaml_file, encoding="utf-8") as f:
+                    raw = yaml.safe_load(f) or {}
+                if isinstance(raw, list):
+                    records = raw
+                elif isinstance(raw, dict):
+                    if "manufacturer" in raw or "device_family" in raw or "metadata" in raw:
+                        doc_id = yaml_file.stem
+                        meta = raw.get("metadata", raw)
+                        rec = {
+                            "id": doc_id,
+                            "name": meta.get("title", doc_id),
+                            "tier": "COMMERCIAL",
+                            "manufacturer": meta.get("manufacturer", raw.get("manufacturer", "Unknown")),
+                            "supported_rats": raw.get("capabilities", {}).get("network_generations", []),
+                            "attack_capabilities": raw.get("capabilities", {}).get("attack_modes", []),
+                            "behavioral_fingerprints": [],
+                            "operator_skill_required": "HIGH",
+                            "source_quality": "MEDIUM",
+                            "sources": raw.get("references", []),
+                            "description": meta.get("title", ""),
+                            "specifications": {},
+                        }
+                        records = [rec]
+                    else:
+                        records = [raw]
+                else:
+                    records = []
                 for rec in records:
                     if not isinstance(rec, dict):
                         continue
                     device = DeviceRecord(
-                        id=rec.get("id", ""),
-                        name=rec.get("name", ""),
-                        tier=rec.get("tier", "UNKNOWN"),
-                        manufacturer=rec.get("manufacturer", "Unknown"),
-                        supported_rats=rec.get("supported_rats", []),
-                        attack_capabilities=rec.get("attack_capabilities", []),
+                        id=(rec.get("id") or rec.get("device_id") or rec.get("title") or yaml_file.stem),
+                        name=rec.get("name", rec.get("title", yaml_file.stem)),
+                        tier=rec.get("tier", rec.get("access_tier", "UNKNOWN")),
+                        manufacturer=rec.get("manufacturer", rec.get("vendor", "Unknown")),
+                        supported_rats=rec.get("supported_rats", rec.get("capabilities", {}).get("network_generations", [])),
+                        attack_capabilities=rec.get("attack_capabilities", rec.get("capabilities", {}).get("attack_modes", [])),
                         behavioral_fingerprints=rec.get("behavioral_fingerprints", []),
                         operator_skill_required=rec.get("operator_skill_required", "UNKNOWN"),
                         source_quality=rec.get("source_quality", "LOW"),
-                        sources=rec.get("sources", []),
-                        description=rec.get("description", ""),
-                        specifications=rec.get("specifications", {}),
+                        sources=rec.get("sources", rec.get("references", [])),
+                        description=rec.get("description", rec.get("name", "")),
+                        specifications=rec.get("specifications", rec.get("timing_signatures", {})),
                     )
                     if device.id:
                         self.devices[device.id] = device
