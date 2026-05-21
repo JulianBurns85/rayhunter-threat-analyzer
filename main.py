@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rayhunter Threat Analyzer v2.2
+Rayhunter Threat Analyzer v2.3
 ===============================
 Analyses Rayhunter output files (NDJSON, PCAP, QMDL) for cellular
 surveillance threats: IMSI catchers, rogue towers, null-cipher attacks,
@@ -14,6 +14,18 @@ Usage:
     python main.py --dir C:\\RH\\captures --html --manifest --verbose
     python main.py --dir C:\\RH\\captures --mnc 003   # Vodafone AU
 
+v2.3 changes:
+    - NovelCidDetector: flags first-seen Cell IDs with ≤3 observations
+      and sub-10s appearance windows (transient rogue CID sweep signature)
+    - EncryptedTrafficRatioDetector: surfaces sessions with anomalously
+      high NAS encryption rates (>70% = Warn, >85% = High)
+    - SessionOverlapCorrelator: identifies dual-carrier parallel capture
+      sessions and outputs overlap windows + cross-carrier timestamp pairs
+    - CrossCarrierEvidencePatcher: injects pinned timestamp pairs into
+      existing cross-carrier findings for USB evidence package
+    - sessions dict passed to reporter for session-level correlation
+    - session_correlation block added to JSON report output
+
 v2.2 changes:
     - HeuristicScorerDetector wired in (runs after all primary detectors)
     - RRCPeriodicityDetector added (detects 210.2s / 610.6s cycles)
@@ -25,22 +37,23 @@ import argparse
 import json
 import sys
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
 
 # -- Parsers ------------------------------------------------------------------
 from parsers.ndjson_parser import NdjsonParser
-from parsers.pcap_parser    import PcapParser
-from parsers.qmdl_parser    import QmdlParser
+from parsers.pcap_parser   import PcapParser
+from parsers.qmdl_parser   import QmdlParser
 
 # -- Primary detectors --------------------------------------------------------
-from detectors.identity_harvest  import IdentityHarvestDetector
-from detectors.cipher_downgrade  import CipherDowngradeDetector
-from detectors.rogue_tower       import RogueTowerDetector
-from detectors.handover_inject   import HandoverInjectDetector
-from detectors.proximity_track   import ProximityTrackDetector
-from detectors.paging_anomaly    import PagingAnomalyDetector
-from detectors.earfcn_anomaly    import EarfcnAnomalyDetector
+from detectors.identity_harvest import IdentityHarvestDetector
+from detectors.cipher_downgrade import CipherDowngradeDetector
+from detectors.rogue_tower      import RogueTowerDetector
+from detectors.handover_inject  import HandoverInjectDetector
+from detectors.proximity_track  import ProximityTrackDetector
+from detectors.paging_anomaly   import PagingAnomalyDetector
+from detectors.earfcn_anomaly   import EarfcnAnomalyDetector
 
 # -- RRC periodicity (210.2s / 610.6s fingerprint) ---------------------------
 try:
@@ -55,6 +68,29 @@ except ImportError:
         "the 210.2s / 610.6s Harris fingerprint detector."
     )
 
+# -- v2.3 detectors -----------------------------------------------------------
+try:
+    from detectors.novel_cid_detector import NovelCidDetector
+    _HAS_NOVEL_CID = True
+except ImportError:
+    _HAS_NOVEL_CID = False
+    print(
+        "[WARN] detectors/novel_cid_detector.py not found — "
+        "Novel CID detection disabled."
+    )
+
+try:
+    from detectors.encrypted_traffic_ratio_detector import (
+        EncryptedTrafficRatioDetector,
+    )
+    _HAS_ENCRYPTED_RATIO = True
+except ImportError:
+    _HAS_ENCRYPTED_RATIO = False
+    print(
+        "[WARN] detectors/encrypted_traffic_ratio_detector.py not found — "
+        "Encrypted traffic ratio detection disabled."
+    )
+
 # -- Post-processing ----------------------------------------------------------
 from detectors.heuristic_scorer import HeuristicScorerDetector
 
@@ -66,7 +102,7 @@ import config_loader
 
 BANNER = r"""
 ╔══════════════════════════════════════════════════════════════╗
-║  RAYHUNTER THREAT ANALYZER v2.2                              ║
+║  RAYHUNTER THREAT ANALYZER v2.3                              ║
 ║  Cellular Surveillance Detection & Forensic Analysis         ║
 ║  Targets: NDJSON · PCAP · QMDL                               ║
 ║  10-Heuristic Framework + YAICD Scoring (Ziayi et al. 2021) ║
@@ -125,6 +161,31 @@ def collect_files(paths: List[str], directory: str) -> Dict[str, List[str]]:
 
 
 # ---------------------------------------------------------------------------
+# Session grouping (v2.3)
+# ---------------------------------------------------------------------------
+
+def group_events_by_session(all_events: list) -> dict:
+    """
+    Group flat event list into a dict of session_id → list[event_dict].
+    Uses the 'source' or 'session_id' field of each event.
+    Falls back to 'unknown' if neither is present.
+    """
+    sessions: dict = defaultdict(list)
+    for evt in all_events:
+        sid = (
+            evt.get("session_id")
+            or evt.get("source", "unknown")
+        )
+        # Normalise: strip file extension and path, keep base name
+        if "/" in sid or "\\" in sid:
+            sid = Path(sid).stem
+        if "." in sid:
+            sid = sid.rsplit(".", 1)[0]
+        sessions[sid].append(evt)
+    return dict(sessions)
+
+
+# ---------------------------------------------------------------------------
 # Analysis pipeline
 # ---------------------------------------------------------------------------
 
@@ -135,9 +196,9 @@ def run_analysis(files: Dict[str, List[str]],
 
     # -- Parse ----------------------------------------------------------------
     parsers = [
-        ("NDJSON", NdjsonParser(cfg),  files["ndjson"]),
-        ("PCAP",   PcapParser(cfg),    files["pcap"]),
-        ("QMDL",   QmdlParser(cfg),    files["qmdl"]),
+        ("NDJSON", NdjsonParser(cfg), files["ndjson"]),
+        ("PCAP",   PcapParser(cfg),   files["pcap"]),
+        ("QMDL",   QmdlParser(cfg),   files["qmdl"]),
     ]
     for label, parser, flist in parsers:
         for f in flist:
@@ -155,9 +216,16 @@ def run_analysis(files: Dict[str, List[str]],
         return {
             "events": [], "findings": [],
             "hardware": [], "heuristics": None,
+            "sessions": {},
         }
 
     print(f"\n  Total events: {len(all_events):,}")
+
+    # -- v2.3: Build sessions dict --------------------------------------------
+    sessions = group_events_by_session(all_events)
+    if verbose:
+        print(f"  [SESSION] {len(sessions)} session(s) identified: "
+              f"{', '.join(sorted(sessions.keys()))}")
 
     # -- Primary detectors ----------------------------------------------------
     primary_detectors = [
@@ -171,6 +239,14 @@ def run_analysis(files: Dict[str, List[str]],
     ]
     if _HAS_RRC:
         primary_detectors.append(RRCPeriodicityDetector(cfg))
+
+    # v2.3: novel CID detector
+    if _HAS_NOVEL_CID:
+        primary_detectors.append(NovelCidDetector(cfg))
+
+    # v2.3: encrypted traffic ratio detector
+    if _HAS_ENCRYPTED_RATIO:
+        primary_detectors.append(EncryptedTrafficRatioDetector(cfg))
 
     all_findings: list = []
     for detector in primary_detectors:
@@ -192,7 +268,8 @@ def run_analysis(files: Dict[str, List[str]],
         )
         fingerprints = fp.analyze(all_events, all_findings)
         if fingerprints:
-            print(f"  [HWFP] {len(fingerprints)} hardware candidate(s) identified")
+            print(f"  [HWFP] {len(fingerprints)} hardware candidate(s) "
+                  f"identified")
     except Exception as exc:
         print(f"  [WARN] HardwareFingerprinter error: {exc}")
         fingerprints = []
@@ -224,6 +301,7 @@ def run_analysis(files: Dict[str, List[str]],
         "findings":   all_findings,
         "hardware":   fingerprints,
         "heuristics": heuristic_result,
+        "sessions":   sessions,           # v2.3
     }
 
 
@@ -235,7 +313,7 @@ def main() -> None:
     print(BANNER)
 
     ap = argparse.ArgumentParser(
-        description="Rayhunter Threat Analyzer v2.2"
+        description="Rayhunter Threat Analyzer v2.3"
     )
     ap.add_argument("--file", "-f", action="append", metavar="FILE",
                     help="Input file. Repeatable.")
@@ -280,8 +358,13 @@ def main() -> None:
           f"MNC={cfg['network']['mnc']}")
     print(f"  OpenCelliD: "
           f"{'enabled' if cfg['opencellid']['enabled'] else 'OFFLINE'}")
-    print(f"  RRC Detector: "
-          f"{'enabled (210.2s + 610.6s)' if _HAS_RRC else 'MISSING'}")
+    rrc_status = "enabled (210.2s + 610.6s)" if _HAS_RRC else "MISSING"
+    print(f"  RRC Detector: {rrc_status}")
+    # v2.3 status
+    novel_status = "enabled" if _HAS_NOVEL_CID else "MISSING"
+    enc_status   = "enabled" if _HAS_ENCRYPTED_RATIO else "MISSING"
+    print(f"  Novel CID Detector: {novel_status}")
+    print(f"  Encrypted Ratio Detector: {enc_status}")
     print()
 
     # Collect files
@@ -323,8 +406,12 @@ def main() -> None:
 
         # YAICD summary block
         if hr:
-            confirmed = [h for h in hr.heuristics if h.status == "CONFIRMED"]
-            partial   = [h for h in hr.heuristics if h.status == "PARTIAL"]
+            confirmed = [
+                h for h in hr.heuristics if h.status == "CONFIRMED"
+            ]
+            partial = [
+                h for h in hr.heuristics if h.status == "PARTIAL"
+            ]
             print()
             print("=" * 64)
             print("YAICD FORMAL DETECTION SCORE (Ziayi et al. 2021)")
@@ -387,7 +474,9 @@ def main() -> None:
             ManifestGenerator(cfg).generate(manifest_files)
             print("[OK] SHA-256 forensic manifest generated.")
         except ImportError:
-            print("[WARN] manifest_generator.py not found — manifest skipped.")
+            print(
+                "[WARN] manifest_generator.py not found — manifest skipped."
+            )
 
 
 if __name__ == "__main__":
