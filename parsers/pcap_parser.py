@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PCAP Parser — GSMTAP/NAS/RRC Event Extractor
+PCAP Parser – GSMTAP/NAS/RRC Event Extractor
 =============================================
 Parses PCAP/PCAPNG files containing GSMTAP-encapsulated LTE traffic
 (type 0x0d = LTE RRC, type 0x01 = GSM Um).
@@ -10,6 +10,16 @@ Falls back to raw packet inspection if pyshark is unavailable.
 Requires: pyshark (which requires Wireshark/tshark to be installed)
 Install:  pip install pyshark
 Wireshark: apt install tshark  OR  brew install wireshark
+
+Fix history:
+  v2.2 (22 May 2026):
+  - FIX: Removed false-positive cipher detection from _extract_gsmtap_basic.
+    The raw byte scanner was triggering EEA0/EIA0 on coincidental bytes near
+    0x5C in payloads — (alg_byte & 0x0F) == 0 is true for any byte with low
+    nibble 0x0, causing false Security Mode Command findings in real data.
+    Basic parser now only detects message type presence (requires NAS header
+    discriminator 0x07 before msg byte). Cipher algorithm detection requires
+    full pyshark dissection and is not attempted in the basic fallback parser.
 """
 
 import json
@@ -64,22 +74,19 @@ class PcapParser:
             return False
 
     def _ensure_event_loop(self):
-        """Create asyncio event loop — fix for Python 3.10+/3.12+/Windows pyshark."""
+        """Create asyncio event loop – fix for Python 3.10+/3.12+/Windows pyshark."""
         import asyncio
         import sys
 
-        # Windows: force SelectorEventLoop (pyshark incompatible with ProactorEventLoop)
         if sys.platform == "win32":
             try:
                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
             except AttributeError:
                 pass
 
-        # Python 3.12+: get_event_loop() raises RuntimeError when no current loop exists
-        # Safe pattern: check for running loop first, create new one if needed
         try:
             asyncio.get_running_loop()
-            return  # already inside a running loop, pyshark will work fine
+            return
         except RuntimeError:
             pass
 
@@ -96,7 +103,7 @@ class PcapParser:
         if self._pyshark_available:
             return self._parse_with_pyshark(filepath)
         else:
-            print("    [WARN] pyshark not available — using basic PCAP parser.")
+            print("    [WARN] pyshark not available – using basic PCAP parser.")
             return self._parse_basic(filepath)
 
     def _parse_with_pyshark(self, filepath: str) -> List[Dict]:
@@ -132,11 +139,7 @@ class PcapParser:
         except Exception:
             pass
 
-        # ── Timestamp validation ──────────────────────────────────────
-        # Detect boot-relative timestamps in pyshark output.
-        # If the max timestamp is before year 2000, pyshark read uptime
-        # values instead of wall-clock UTC. Apply the same mtime anchor
-        # correction as the basic parser.
+        # ── Timestamp validation ──────────────────────────────────────────────
         YEAR_2000_TS = 946684800.0
         if events:
             ts_values = []
@@ -155,7 +158,7 @@ class PcapParser:
                     max_rel = max(ts_values)
                     ts_offset = file_mtime - max_rel
                     print(f"    [INFO] {Path(filepath).name}: pyshark boot-relative "
-                          f"timestamps detected — applying mtime offset +{ts_offset:.0f}s")
+                          f"timestamps detected – applying mtime offset +{ts_offset:.0f}s")
                     for ev in events:
                         try:
                             ts_str = ev.get("timestamp", "")
@@ -182,7 +185,7 @@ class PcapParser:
             "raw": {},
         }
 
-        # ── GSMTAP layer ─────────────────────────────────────────────
+        # ── GSMTAP layer ───────────────────────────────────────────────────────
         gsmtap_type = None
         if hasattr(pkt, "gsmtap"):
             gt = pkt.gsmtap
@@ -200,11 +203,10 @@ class PcapParser:
             except (ValueError, TypeError):
                 ev["earfcn"] = None
 
-        # Only process LTE RRC (0x0d), LTE NAS (0x0e), GSM (0x01)
         if gsmtap_type not in (GSMTAP_TYPE_LTE_RRC, GSMTAP_TYPE_LTE_NAS, GSMTAP_TYPE_UM, None):
             return None
 
-        # ── LTE NAS layer ─────────────────────────────────────────────
+        # ── LTE NAS layer ──────────────────────────────────────────────────────
         if hasattr(pkt, "nas_eps"):
             nas = pkt.nas_eps
             ev["layer"] = "NAS"
@@ -213,7 +215,6 @@ class PcapParser:
             if msg_type:
                 ev["msg_type"] = str(msg_type)
 
-            # Cipher algorithm
             cipher = getattr(nas, "nas_eps_emm_toc", None) or \
                      getattr(nas, "nas_eps_emm_nas_cipher_alg", None)
             if cipher:
@@ -223,7 +224,6 @@ class PcapParser:
                 else:
                     ev["cipher_alg"] = str(cipher)
 
-            # Integrity algorithm
             integrity = getattr(nas, "nas_eps_emm_toi", None) or \
                         getattr(nas, "nas_eps_emm_nas_int_alg", None)
             if integrity:
@@ -233,7 +233,6 @@ class PcapParser:
                 else:
                     ev["integrity_alg"] = str(integrity)
 
-            # Identity type
             id_type = getattr(nas, "nas_eps_emm_type_of_id", None)
             if id_type:
                 id_str = str(id_type).lower()
@@ -244,17 +243,15 @@ class PcapParser:
                 elif "tmsi" in id_str or id_str == "4":
                     ev["identity_type"] = "TMSI"
 
-            # Paging type
             if "paging" in str(ev.get("msg_type", "")).lower():
                 paging_id = getattr(nas, "nas_eps_emm_paging_id", "")
                 ev["paging_type"] = "IMSI" if "imsi" in str(paging_id).lower() else "S-TMSI"
 
-        # ── LTE RRC layer ─────────────────────────────────────────────
+        # ── LTE RRC layer ──────────────────────────────────────────────────────
         if hasattr(pkt, "lte_rrc"):
             rrc = pkt.lte_rrc
             ev["layer"] = ev.get("layer", "RRC") or "RRC"
 
-            # Message type
             for attr in dir(rrc):
                 for kw, human in {
                     "rrcconnectionrelease": "RRC Connection Release",
@@ -266,20 +263,17 @@ class PcapParser:
                     if kw in attr.lower():
                         ev["msg_type"] = ev.get("msg_type") or human
 
-            # Handover / redirect markers
             rrc_str = str(dir(rrc)).lower()
             ev["has_mobility_control"] = "mobilitycontrolinfo" in rrc_str
             ev["has_geran_redirect"]   = "geran" in rrc_str or "redirectedcarrier" in rrc_str
             ev["has_measreport"]       = "measurementreport" in rrc_str
             ev["has_prose"]            = "proximityconfig" in rrc_str
 
-            # Cell / frequency info
             try:
                 ev["pci"] = int(getattr(rrc, "lte_rrc_physCellId", 0))
             except (ValueError, TypeError):
                 pass
 
-        # ── Filter: only return events with substance ─────────────────
         has_data = any([
             ev.get("msg_type"),
             ev.get("cipher_alg"),
@@ -295,7 +289,7 @@ class PcapParser:
         """
         Minimal PCAP parser that reads raw packets without Wireshark.
         Detects GSMTAP frame type and flags suspicious byte patterns.
-        No full dissection — use only as fallback.
+        No full dissection – use only as fallback.
 
         Timestamp correction: Rayhunter on Android sometimes stores
         boot-relative timestamps (seconds since device boot) rather than
@@ -316,7 +310,6 @@ class PcapParser:
             print(f"    [ERROR] Cannot read {filepath}: {e}")
             return events
 
-        # Detect PCAP magic
         if data[:4] not in (b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4",
                              b"\x0a\x0d\x0d\x0a"):
             print(f"    [WARN] {Path(filepath).name}: not a valid PCAP file")
@@ -324,9 +317,9 @@ class PcapParser:
 
         byte_order = "<" if data[:4] == b"\xd4\xc3\xb2\xa1" else ">"
 
-        # ── Pass 1: collect all packets with GSMTAP content ──────────
-        raw_packets = []  # list of (ts_sec, ts_usec, pkt_data)
-        pos = 24  # skip global PCAP header
+        # ── Pass 1: collect all packets ───────────────────────────────────────
+        raw_packets = []
+        pos = 24
 
         while pos + 16 < len(data):
             try:
@@ -343,9 +336,7 @@ class PcapParser:
         if not raw_packets:
             return events
 
-        # ── Timestamp correction ──────────────────────────────────────
-        # Threshold: if max ts_sec < year 2000 (946684800), timestamps
-        # are boot-relative. Anchor last packet to file mtime.
+        # ── Timestamp correction ──────────────────────────────────────────────
         YEAR_2000_TS = 946684800
         max_ts_sec = max(p[0] for p in raw_packets)
 
@@ -356,14 +347,13 @@ class PcapParser:
                 max_relative = max_ts_sec + max(p[1] for p in raw_packets) / 1e6
                 ts_offset = file_mtime - max_relative
                 print(f"    [INFO] {Path(filepath).name}: boot-relative timestamps "
-                      f"detected — anchoring to file mtime "
+                      f"detected – anchoring to file mtime "
                       f"(offset +{ts_offset:.0f}s)")
             except Exception:
                 pass
 
-        # ── Pass 2: extract events with corrected timestamps ──────────
+        # ── Pass 2: extract events with corrected timestamps ──────────────────
         for pkt_idx, (ts_sec, ts_usec, pkt_data) in enumerate(raw_packets):
-            # Look for GSMTAP in UDP payload (port 4729 = 0x1279)
             if b"\x12\x79" in pkt_data or b"\x79\x12" in pkt_data:
                 corrected_ts = ts_sec + ts_usec / 1e6 + ts_offset
                 ev = self._extract_gsmtap_basic(
@@ -376,11 +366,21 @@ class PcapParser:
 
     def _extract_gsmtap_basic(self, pkt_data: bytes, source: str,
                               idx: int, ts: float) -> Optional[Dict]:
-        """Extract GSMTAP type and basic NAS markers from raw packet bytes."""
+        """Extract GSMTAP type and basic NAS markers from raw packet bytes.
+
+        FIX v2.2: Cipher algorithm detection removed from basic parser.
+        The previous implementation used (alg_byte & 0x0F) == 0 and
+        (alg_byte >> 4) == 0 to detect EEA0/EIA0 from raw bytes — these
+        conditions are true for a large proportion of normal byte values,
+        causing widespread false positive Security Mode Command findings.
+
+        Cipher detection requires full NAS dissection (pyshark + Wireshark).
+        The basic fallback parser only flags message type presence using the
+        NAS EMM discriminator byte (0x07) as a validity check.
+        """
         from datetime import datetime, timezone
 
         # Find GSMTAP header after Ethernet + IP + UDP
-        # GSMTAP starts with version=0x02
         gsmtap_start = None
         for i in range(len(pkt_data) - 4):
             if pkt_data[i] == 0x02 and pkt_data[i+1] in (0x04, 0x08):
@@ -407,23 +407,31 @@ class PcapParser:
             "gsmtap_type": gsmtap_type,
         }
 
-        # Detect NAS message type bytes in payload
-        # LTE NAS: Security Mode Command = 0x5C, Identity Request = 0x55
+        # Detect NAS message type bytes in payload.
+        # Require NAS EMM protocol discriminator (0x07) immediately before
+        # the message type byte as a validity check to reduce false positives.
+        #
+        # FIX v2.2: No cipher_alg or integrity_alg detection here.
+        # Raw byte scanning for EEA0/EIA0 is unreliable without full dissection.
+        # Cipher detection only occurs via pyshark (_extract_pyshark_event).
         if payload:
-            if 0x55 in payload:
-                ev["msg_type"] = "Identity Request"
-                ev["identity_type"] = "IMSI"
-            elif 0x5C in payload:
-                ev["msg_type"] = "Security Mode Command"
-                # Check for EEA0 (byte after command is usually cipher alg)
-                idx_5c = payload.index(0x5C)
-                if idx_5c + 2 < len(payload):
-                    alg_byte = payload[idx_5c + 2]
-                    if (alg_byte & 0x0F) == 0:
-                        ev["cipher_alg"] = "EEA0"
-                    if (alg_byte >> 4) == 0:
-                        ev["integrity_alg"] = "EIA0"
-            elif 0x54 in payload:
-                ev["msg_type"] = "Authentication Reject"
+            found_msg = False
+            for i in range(len(payload) - 1):
+                if payload[i] == 0x07:
+                    next_byte = payload[i + 1]
+                    if next_byte == 0x55:
+                        ev["msg_type"] = "Identity Request"
+                        ev["identity_type"] = "IMSI"
+                        found_msg = True
+                        break
+                    elif next_byte == 0x5C:
+                        ev["msg_type"] = "Security Mode Command"
+                        # No cipher_alg set — cannot reliably decode from raw bytes
+                        found_msg = True
+                        break
+                    elif next_byte == 0x54:
+                        ev["msg_type"] = "Authentication Reject"
+                        found_msg = True
+                        break
 
         return ev if ev.get("msg_type") else None
