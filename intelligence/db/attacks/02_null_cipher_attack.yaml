@@ -1,0 +1,72 @@
+# Null-Cipher Attack Intelligence
+# Source: 3GPP TS 33.401, EFF Rayhunter documentation, academic literature
+# Last updated: 2026-05-22
+
+metadata:
+  title: "Null-Cipher Attack (EEA0/EIA0)"
+  attack_class: "Man-in-the-Middle / Downgrade"
+  severity: CRITICAL
+  references:
+    - "3GPP TS 33.401 §5.1.3.2 — Security architecture, EIA0 prohibition"
+    - "3GPP TS 24.301 §5.4.3 — NAS security mode control procedure"
+    - "EFF Rayhunter heuristics documentation"
+
+description: >
+  A null-cipher attack occurs when a rogue base station negotiates
+  Security Mode Command (SMC) parameters of EEA0 (no encryption) and/or
+  EIA0 (no integrity protection). 3GPP TS 33.401 explicitly prohibits
+  EIA0 in normal network operation — its presence indicates either a
+  rogue eNodeB or a misconfigured/compromised legitimate network element.
+
+  When both EEA0 and EIA0 are negotiated, all NAS and AS traffic is
+  transmitted in plaintext with no tamper detection — enabling full
+  Man-in-the-Middle interception.
+
+variants:
+  full_null_cipher:
+    description: "EEA0 (no encryption) AND EIA0 (no integrity)"
+    severity: CRITICAL
+    notes: "Plaintext transmission, no tamper detection — definitive MitM"
+
+  encryption_only_null:
+    description: "EEA0 (no encryption) with valid integrity (EIA1/EIA2)"
+    severity: HIGH
+    notes: "Traffic visible but tamper-detectable"
+
+  integrity_only_null:
+    description: "Valid encryption (EEA1/EEA2) with EIA0 (no integrity)"
+    severity: CRITICAL
+    notes: >
+      EIA0 alone is prohibited by 3GPP — presence indicates rogue device
+      regardless of encryption state
+
+hardware_correlation:
+  likely_devices:
+    - "srsRAN/OpenAirInterface default config (EEA0+EIA0 out of box)"
+    - "Septier IMSI Catcher intercept mode"
+    - "PKI 1625/1650 intercept mode"
+    - "Generic rogue eNodeB (software-defined)"
+  unlikely_devices:
+    - name: "Harris HailStorm / StingRay in Transparent Proxy mode"
+      reason: >
+        Harris Transparent Proxy mode maintains EEA2/EIA2 to avoid
+        detection. EEA0 findings on Harris-pattern data should be
+        verified via tshark before submission — may be UE capability
+        field false positive.
+
+australian_context:
+  legal_reference: "Telecommunications (Interception and Access) Act 1979 (Cth) s.7"
+  notes: >
+    Negotiating null-cipher to enable interception of communications
+    without lawful authority constitutes an offence under the TIA Act 1979.
+
+detection_method:
+  rayhunter: "SecurityModeCommand with eea=0 and/or eia=0 in NAS decode"
+  tshark_command: >
+    tshark -r <file> -Y 'lte_rrc.SecurityModeCommand_element'
+    -T fields -e lte_rrc.cipheringAlgorithm -e lte_rrc.integrityProtAlgorithm
+
+false_positive_notes: >
+  UE capability fields in some captures may show EEA0 capability listing
+  without it being negotiated. Always verify against actual SMC message
+  cipheringAlgorithm field, not UE capability IE.

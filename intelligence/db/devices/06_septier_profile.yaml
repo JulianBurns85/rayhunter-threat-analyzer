@@ -1,0 +1,74 @@
+# Septier IMSI Catcher / GUARDIAN — Device Intelligence Profile
+# Source: EFF Street Level Surveillance, ACM WPES 2019 paper on commercial IMSI catchers,
+#         published Septier product documentation, The Intercept surveillance catalogue
+# Last updated: 2026-05-22
+
+metadata:
+  title: "Septier IMSI Catcher / GUARDIAN Platform"
+  manufacturer: "Septier Communication Ltd (Israel)"
+  device_family: ["Septier IMSI Catcher", "Septier GUARDIAN", "Septier GSM Interceptor"]
+  classification: "Commercial law enforcement / intelligence grade"
+  source_confidence: MEDIUM
+  notes: >
+    Septier Communication is an Israeli surveillance technology company.
+    Their products are documented in The Intercept's published government
+    surveillance catalogue and EFF Street Level Surveillance database.
+    Specific technical signatures are partially documented in academic
+    literature (ACM WPES 2019 anatomy paper).
+
+capabilities:
+  network_generations: [2G, 3G, 4G_LTE]
+  duplex: full
+  attack_modes:
+    - IMSI_harvest
+    - IMEI_harvest
+    - location_tracking
+    - call_intercept
+    - SMS_intercept
+    - data_intercept
+    - denial_of_service
+  passive_mode: true
+  active_mode: true
+
+behavioral_signatures:
+  primary:
+    - name: "Multi-IMSI burst collection"
+      description: >
+        Septier devices are documented to collect multiple IMSIs in rapid
+        succession across a target area. Unlike Harris which targets specific
+        individuals, Septier in mass-collection mode sweeps all devices.
+      severity: HIGH
+      indicator: "Multiple Identity Requests across multiple Cell IDs in short window"
+
+    - name: "Identity harvest without attach"
+      description: >
+        Sends Identity Requests to devices that have not initiated an attach
+        procedure. Unprovoked identity solicitation.
+      spec_ref: "3GPP TS 24.301 §5.4.4"
+      severity: CRITICAL
+
+    - name: "Specific SMC timing pattern"
+      description: >
+        Security Mode Commands from Septier-class devices show characteristic
+        timing relative to the preceding Identity Request — typically 200-800ms.
+      severity: MEDIUM
+      confidence: LOW
+      notes: "Timing signature requires large sample for statistical confirmation"
+
+  secondary:
+    - name: "EEA0 null-cipher negotiation"
+      description: >
+        Septier devices in intercept mode negotiate EEA0 (no encryption)
+        to enable plaintext traffic capture.
+      spec_ref: "3GPP TS 33.401 §5.1.3.2"
+      severity: CRITICAL
+
+differentiators_from_harris:
+  - "Mass collection vs targeted — Septier sweeps area, Harris targets individual"
+  - "Septier more likely to use EEA0; Harris Transparent Proxy maintains EEA2"
+  - "Harris shows metronomic release cycles; Septier timing is less regular"
+
+references:
+  - "EFF Street Level Surveillance: https://sls.eff.org/technologies/cell-site-simulators-imsi-catchers"
+  - "ACM WPES 2019: Anatomy of Commercial IMSI Catchers and Detectors"
+  - "The Intercept: Secret government surveillance catalogue"
