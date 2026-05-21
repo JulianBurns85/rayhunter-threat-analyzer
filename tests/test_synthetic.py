@@ -220,7 +220,7 @@ def run_tests():
             print(f"    - {detector.name}: no findings")
         all_findings.extend(findings)
 
-    fingerprinter = HardwareFingerprinter(cfg)
+    fingerprinter = HardwareFingerprinter(db_path="intelligence/db", cfg=cfg)
     hardware = fingerprinter.analyze(events, all_findings)
     if hardware:
         print(f"    ✓ HardwareFingerprinter: {len(hardware)} candidate(s)")
