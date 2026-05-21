@@ -1,0 +1,71 @@
+# UEInformationRequest-r9 — Forensic Intelligence
+# Source: 3GPP TS 36.331 §6.2 (RRC Protocol), confirmed primary source
+#         Harris RayFish Controller leaked manuals (The Intercept 2016)
+#         Cranbourne East investigation confirmed evidence
+# Last updated: 2026-05-22
+
+title: "UEInformationRequest-r9 — RRC Message Forensic Significance"
+spec_ref: "3GPP TS 36.331 §6.2, §5.7.5"
+severity: HIGH
+confidence: HIGH
+
+description: >
+  UEInformationRequest-r9 is an RRC message sent by an eNodeB to request
+  detailed diagnostic information from a connected UE. Fields include:
+  - rlfReport-r9: Radio Link Failure report request
+  - rlf-Report-r10: Extended RLF report
+  - mobilityHistory-r10: UE mobility history (location history)
+  - logMeasReport-r10: Logged measurement report
+  - connEstFailReport-r13: Connection establishment failure report
+
+legitimate_use:
+  description: >
+    In legitimate network operation, UEInformationRequest-r9 is sent by
+    network operations centers during troubleshooting, drive testing, or
+    network optimization campaigns. It is NOT a routine per-connection message.
+    Normal commercial networks send this rarely and only during specific
+    diagnostic operations.
+  expected_rate: "Near zero in normal operation — typically <0.1% of sessions"
+
+imsi_catcher_significance:
+  description: >
+    Harris commercial IMSI catchers in Transparent Proxy mode are documented
+    to send UEInformationRequest-r9 to harvest detailed UE information including
+    mobility history and connection failure reports. This provides the attacker
+    with detailed historical location information of the target.
+  cranbourne_east_confirmed: >
+    UEInformationRequest-r9 observed at 100% correlation with rogue Cell ID
+    sessions on Vodafone (505-03) capture unit. 46× baseline rate confirmed.
+    This is one of the strongest Harris-specific indicators in the investigation.
+  harris_consistency: >
+    The combination of:
+    - UEInformationRequest-r9 at elevated rate
+    - Zero EEA0 cipher events (Transparent Proxy)
+    - Metronomic T3 timer (210.2s / 40.5s)
+    - Cross-carrier simultaneous release
+    is uniquely consistent with Harris HailStorm/StingRay II hardware.
+
+detection_method:
+  rayhunter_indicator: "UEInformationRequest-r9 message in RRC decode"
+  tshark_command: >
+    tshark -r <file> -Y 'lte_rrc.ueInformationRequest_r9_element'
+    -T fields -e frame.time -e lte_rrc.rlfReport_r9
+  threshold: >
+    Any UEInformationRequest-r9 in a capture session warrants investigation.
+    Rate >1% of sessions is CRITICAL. Rate >10% is definitive anomaly.
+
+3gpp_message_definition:
+  message_type: "DL-DCCH (Downlink Dedicated Control Channel)"
+  direction: "eNodeB → UE"
+  asn1_name: "ueInformationRequest-r9"
+  introduced: "3GPP Release 9"
+  fields_of_interest:
+    - "rlfReport-r9: BOOLEAN — request RLF report"
+    - "mobilityHistoryReport-r10: BOOLEAN — request mobility history"
+    - "logMeasReport-r10: BOOLEAN — request logged measurements"
+
+references:
+  - "3GPP TS 36.331 §6.2 — DL-DCCH message types"
+  - "3GPP TS 36.331 §5.7.5 — UE information procedure"
+  - "Harris RayFish Controller leaked manuals (The Intercept, September 2016)"
+  - "Cranbourne East investigation — confirmed 46x baseline UEInformationRequest-r9 rate"
