@@ -114,9 +114,6 @@ class RogueTowerDetector(BaseDetector):
                     ),
                 ))
 
-        return findings
-
-        operator_key = f"{self.mcc}-{self.mnc}"
 
         for cell in cells:
             cell_id = cell.get("cell_id")
