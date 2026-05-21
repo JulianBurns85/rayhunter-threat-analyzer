@@ -1,0 +1,42 @@
+metadata:
+  title: Australian LTE Spectrum ACMA
+  jurisdiction: Australia MCC 505
+  notes: 2G shutdown 2018. GERAN redirect is forensically anomalous.
+operators:
+  telstra:
+    mcc: 505
+    mnc: 001
+    lte_bands:
+      - {band: 1, freq_mhz: 2100, earfcn_dl_range: [0, 599]}
+      - {band: 3, freq_mhz: 1800, earfcn_dl_range: [1200, 1949]}
+      - {band: 7, freq_mhz: 2600, earfcn_dl_range: [2750, 3449]}
+      - {band: 26, freq_mhz: 850, earfcn_dl_range: [8690, 9039]}
+      - {band: 28, freq_mhz: 700, earfcn_dl_range: [9210, 9659]}
+    anomalous_earfcns:
+      - {earfcn: 16384, notes: Outside all 3GPP LTE band tables}
+  vodafone:
+    mcc: 505
+    mnc: 003
+    lte_bands:
+      - {band: 1, freq_mhz: 2100, earfcn_dl_range: [0, 599]}
+      - {band: 3, freq_mhz: 1800, earfcn_dl_range: [1200, 1949]}
+      - {band: 5, freq_mhz: 850, earfcn_dl_range: [2400, 2649]}
+      - {band: 28, freq_mhz: 700, earfcn_dl_range: [9210, 9659]}
+  optus:
+    mcc: 505
+    mnc: 006
+    lte_bands:
+      - {band: 1, freq_mhz: 2100, earfcn_dl_range: [0, 599]}
+      - {band: 3, freq_mhz: 1800, earfcn_dl_range: [1200, 1949]}
+      - {band: 8, freq_mhz: 900, earfcn_dl_range: [3450, 3799]}
+      - {band: 28, freq_mhz: 700, earfcn_dl_range: [9210, 9659]}
+      - {band: 40, freq_mhz: 2300, earfcn_dl_range: [38650, 39649]}
+geran_significance:
+  note: Australia 2G shutdown 2018. GERAN redirect is forensically anomalous.
+  severity: CRITICAL
+rogue_indicators:
+  - {description: EARFCN outside licensed ranges, severity: CRITICAL}
+  - {description: Cell ID not in OpenCelliD, severity: CRITICAL}
+  - {description: GERAN redirect 2G shutdown 2018, severity: CRITICAL}
+  - {description: Same Cell ID multiple EARFCNs, severity: CRITICAL}
+  - {description: TAC mismatch operator geography, severity: MEDIUM}

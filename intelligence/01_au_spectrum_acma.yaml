@@ -1,0 +1,122 @@
+# Australian Spectrum Intelligence — ACMA Licensed Bands
+# Source: ACMA spectrum licensing data, Whirlpool AU mobile frequencies wiki
+# Last updated: 2026-05-22
+# Purpose: Cross-reference observed EARFCNs against licensed operator bands
+#          Any cell operating outside these ranges is anomalous
+
+metadata:
+  title: "Australian LTE Spectrum — ACMA Licensed Operator Bands"
+  version: "1.0"
+  source: "ACMA spectrum auctions, operator published band plans"
+  jurisdiction: "Australia (MCC 505)"
+  notes: >
+    2G networks shut down in Australia as of 2018. Any GSM/GERAN redirect
+    is therefore forensically significant — there is no legitimate 2G
+    infrastructure to redirect to in Australia.
+
+operators:
+  telstra:
+    mcc: "505"
+    mnc: "001"
+    name: "Telstra"
+    lte_bands:
+      - band: 1
+        freq_mhz: 2100
+        earfcn_dl_range: [0, 599]
+        notes: "Limited deployment, handful of sites"
+      - band: 3
+        freq_mhz: 1800
+        earfcn_dl_range: [1200, 1949]
+        notes: "Primary urban band — 10/15/20MHz carriers"
+      - band: 7
+        freq_mhz: 2600
+        earfcn_dl_range: [2750, 3449]
+        notes: "Metro capacity layer"
+      - band: 26
+        freq_mhz: 850
+        earfcn_dl_range: [8690, 9039]
+        notes: "Telstra 850MHz coverage layer — B26 (extended B5)"
+      - band: 28
+        freq_mhz: 700
+        earfcn_dl_range: [9210, 9659]
+        notes: "Primary regional/rural coverage — APT 700 band"
+    anomalous_earfcns:
+      - earfcn: 16384
+        notes: "Outside all 3GPP LTE band tables — confirmed anomalous in Cranbourne East investigation"
+
+  vodafone:
+    mcc: "505"
+    mnc: "003"
+    name: "Vodafone AU"
+    lte_bands:
+      - band: 1
+        freq_mhz: 2100
+        earfcn_dl_range: [0, 599]
+        notes: "Urban coverage"
+      - band: 3
+        freq_mhz: 1800
+        earfcn_dl_range: [1200, 1949]
+        notes: "Primary band — 10-20MHz depending on area"
+      - band: 5
+        freq_mhz: 850
+        earfcn_dl_range: [2400, 2649]
+        notes: "850MHz coverage — Vodafone low-band 4G"
+      - band: 28
+        freq_mhz: 700
+        earfcn_dl_range: [9210, 9659]
+        notes: "700MHz APT — shared with Telstra/Optus"
+
+  optus:
+    mcc: "505"
+    mnc: "006"
+    name: "Optus"
+    lte_bands:
+      - band: 1
+        freq_mhz: 2100
+        earfcn_dl_range: [0, 599]
+        notes: "Darwin, Tasmania primarily"
+      - band: 3
+        freq_mhz: 1800
+        earfcn_dl_range: [1200, 1949]
+        notes: "Primary band"
+      - band: 8
+        freq_mhz: 900
+        earfcn_dl_range: [3450, 3799]
+        notes: "900MHz — re-farmed 2G spectrum"
+      - band: 28
+        freq_mhz: 700
+        earfcn_dl_range: [9210, 9659]
+        notes: "APT 700"
+      - band: 40
+        freq_mhz: 2300
+        earfcn_dl_range: [38650, 39649]
+        notes: "TDD — metro areas only (Vivid spectrum)"
+
+geran_significance:
+  note: >
+    Australia's 2G (GSM/GERAN) networks were shut down in 2018.
+    Any RRCConnectionRelease containing a GERAN redirected carrier
+    in Australia is forensically anomalous — there is no legitimate
+    2G network to redirect to. This is a strong indicator of a rogue
+    eNodeB attempting a 2G downgrade attack.
+  references:
+    - "3GPP TS 36.331 §5.3.12 — RRC Connection Release with redirect"
+    - "3GPP TS 33.401 §C.1 — Security considerations for 2G fallback"
+
+rogue_indicators:
+  - description: "EARFCN outside all licensed operator ranges"
+    severity: CRITICAL
+    confidence: HIGH
+  - description: "Cell ID not present in OpenCelliD for this MCC/MNC/TAC"
+    severity: CRITICAL
+    confidence: MEDIUM
+  - description: "GERAN redirect in RRCConnectionRelease (2G shutdown since 2018)"
+    severity: CRITICAL
+    confidence: HIGH
+  - description: "Same Cell ID observed on multiple EARFCNs"
+    severity: CRITICAL
+    confidence: HIGH
+    notes: "Legitimate LTE cell operates on exactly one EARFCN"
+  - description: "TAC not matching operator known deployment geography"
+    severity: MEDIUM
+    confidence: MEDIUM
