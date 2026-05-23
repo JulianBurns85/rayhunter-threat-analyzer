@@ -60,3 +60,17 @@ check_cells.py
 # Sensitive
 config_local.yaml
 secrets.yaml
+
+evidence/
+advanced_forensics.py
+baseline_comparison.py
+bladerf_capture.py
+pyshark_scat_fix.py
+rayhunter_report_*.json
+test_report.json
+advanced_forensic_report.json
+fix_db_engine*.py
+session_overlap_correlator.py
+cross_carrier_timestamp_patch.py
+__pycache__/
+*.pyc

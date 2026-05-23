@@ -1,3 +1,19 @@
+# --- Python 3.14 asyncio fix for pyshark ---
+import asyncio
+try:
+    import nest_asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    nest_asyncio.apply(loop)
+except ImportError:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+# --- End asyncio fix ---
 #!/usr/bin/env python3
 """
 PCAP Parser – GSMTAP/NAS/RRC Event Extractor
