@@ -288,6 +288,26 @@ Investigation into confirmed IMSI catcher activity at a neighbouring property in
 
 ---
 
+## 🛰️ Coming Next — Castnet
+
+Castnet is the next evolution of this project: a **distributed civilian IMSI catcher 
+detection and geolocation network**.
+
+Where Rayhunter Threat Analyzer is a forensic batch tool, Castnet is the live 
+operational layer — turning individual detection units into a coordinated network 
+capable of physically locating rogue transmitters in real time.
+
+### How It Works
+
+Every Castnet node (a phone, a Rayhunter unit, or an OBD-II vehicle dongle) 
+passively monitors cellular signals and reports confirmed rogue CID detections — 
+with GPS coordinates and signal strength — to a central aggregation layer.
+
+When three or more nodes detect the same rogue CID simultaneously, trilateration 
+runs automatically.
+
+---
+
 ## Acknowledgements
 
 - [EFF Rayhunter](https://github.com/EFForg/rayhunter) -- the foundation this tool is built on
