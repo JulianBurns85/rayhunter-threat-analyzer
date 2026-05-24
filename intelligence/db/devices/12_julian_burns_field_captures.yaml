@@ -1,0 +1,127 @@
+---
+# RAYHUNTER THREAT ANALYZER — Primary Evidence Reference
+# ID: 12_julian_burns_field_captures
+# Source: Julian Burns (2025-2026) field captures, Cranbourne East, Victoria, Australia
+#         Regulatory submissions: ACMA ENQ-1851DVJH04, Victoria Police CIRS-20260331-141
+# Classification: PRIMARY EVIDENCE — Investigator's own data
+# Last Updated: Session 7
+
+title: "Julian Burns Field Capture Evidence Summary"
+investigator: "Julian Burns"
+location: "Cranbourne East, Victoria, Australia"
+coordinates_approx: "38.1149°S, 145.2803°E"
+investigation_period: "2025 (started) — ongoing 2026"
+regulatory_references:
+  acma: "ENQ-1851DVJH04"
+  victoria_police_1: "CIRS-20260331-141"
+  telstra_complaint: "Formal refusal received"
+  tio: "Active"
+  eff_contact: "Hayley Pedersen"
+
+hardware:
+  unit_1:
+    device: "TP-Link M7350 (custom Rayhunter firmware)"
+    network: "Telstra AU"
+    rayhunter_version: "v0.10.2"
+  unit_2:
+    device: "TP-Link M7350 (custom Rayhunter firmware)"
+    network: "Vodafone AU"
+    rayhunter_version: "v0.10.2"
+  processing: "Raspberry Pi 5 ('overkill')"
+  analysis: "Rayhunter Threat Analyzer v1.1 (custom Python)"
+
+# ── CONFIRMED FINDINGS ─────────────────────────────────────────────────────────
+confirmed_findings:
+
+  null_cipher_violations:
+    count: 55232
+    type: "EEA0+EIA0 Security Mode Command (full null cipher)"
+    networks: ["Telstra AU", "Vodafone AU"]
+    normal_expected: 0
+    tucker_classification: "CRITICAL — >15% exposure ratio equivalent"
+    3gpp_ref: "3GPP TS 33.401 — null cipher prohibited in commercial operation"
+
+  identity_request_flood:
+    count_in_window: 390
+    window_seconds: 120
+    tucker_permitted_max: 2
+    ratio_above_max: "195x"
+    tucker_classification: "CRITICAL — statistically extraordinary (p << 0.005)"
+
+  auth_reject_identity_chain:
+    description: "Authentication Reject → Identity Request attack chain"
+    confirmed_on: ["Telstra AU", "Vodafone AU"]
+    significance: "Independent confirmation on both networks = single rogue source"
+    tucker_ref: "Table III — Auth Reject is IMSI-exposing message in all generations"
+
+  cross_network_cell_id_overlap:
+    description: "Identical Cell ID appearing simultaneously in Telstra and Vodafone captures"
+    forensic_significance: >
+      Cell IDs are carrier-specific. Overlap proves single physical rogue transmitter
+      with operator-cycling capability. Cannot occur naturally.
+    harris_ref: "iDEN Manual §1-11 Advanced BTS Parameters — Cell ID is operator-configurable 0-65535"
+    pki_ref: "PKI 1625 product specifications — operator cycling capability"
+    classification: "CRITICAL — forensic cornerstone"
+
+  rrc_periodicity_signature:
+    median_cycle_seconds: 210.2
+    std_dev_seconds: 0.138
+    sample_count: "Sufficient for statistical significance"
+    commercial_network_std_dev: ">30 seconds (aperiodic)"
+    precision_ratio: "19x more precise than commercial baseline"
+    hardware_candidate: "srsRAN default timer OR custom-configured commercial device"
+    classification: "CRITICAL — hardware fingerprint"
+
+  plaintext_imeisv_exposure:
+    event: "UEInformationRequest-r9 captured during fresh attach procedure"
+    significance: >
+      Harris QSG Section 4-2 acknowledges IMEI is 'rarely broadcast' in LTE.
+      Explicit IMEISV request during fresh attach = deliberate device fingerprinting.
+      Indicates targeted surveillance, not passive monitoring.
+    classification: "CRITICAL"
+
+  simultaneous_cross_carrier_release:
+    description: "RRCConnectionRelease events on Telstra and Vodafone within <1 second"
+    normal_occurrence: "Impossible in legitimate network operation"
+    classification: "CRITICAL"
+
+# ── FORENSIC MANIFEST SUMMARY ─────────────────────────────────────────────────
+forensic_manifest:
+  total_capture_files: 19819  # from all_capture_files.csv
+  manifest_files: 24  # rayhunter_manifest_*.csv files
+  sha256_hashed: true
+  chain_of_custody: "Maintained — manifests with SHA-256 per file"
+  submitted_to: ["ACMA ENQ-1851DVJH04", "EFF (Hayley Pedersen)", "Victoria Police"]
+
+# ── ATTACKER PROFILE ASSESSMENT ───────────────────────────────────────────────
+attacker_assessment:
+  matched_profile: "State Actor / Law Enforcement (attacker_profiles.yaml)"
+  danger_score: "10.0/10"
+  confidence: "HIGH"
+  skill_level: "PROFESSIONAL"
+  automation: "HIGH"
+  persistence: "MEDIUM-HIGH (multi-day sustained operation)"
+  targeting: "Specific residential address — NOT dragnet"
+
+  hardware_candidates:
+    primary: "PKI 1625 Advanced IMSI Catcher (operator cycling + Band 28)"
+    secondary: "Harris HailStorm + Gemini + Arrowhead (Band 28 + LTE + DF)"
+    tertiary: "srsRAN custom configuration (210s timer match)"
+    excludes: "YateBTS (GSM-only, no LTE); generic open-source (no operator cycling)"
+
+  discriminating_evidence:
+    for_commercial_over_srsran:
+      - "Attach Reject present — srsRAN typically omits this"
+      - "Cross-carrier operator cycling — requires commercial-grade hardware"
+      - "Sustained operation over multiple days — srsRAN less stable"
+    for_pki_over_harris:
+      - "Cross-carrier simultaneous operation matches PKI 1625 multi-carrier specs"
+      - "PKI 1625 explicitly documented for residential deployment"
+    unresolved:
+      - "210.2s cycle matches srsRAN default — could indicate srsRAN-based commercial clone"
+
+sources:
+  - citation: "Julian Burns field captures (2025-2026), Cranbourne East, Victoria."
+    regulatory: "ACMA ENQ-1851DVJH04"
+    quality: HIGH  # Primary investigator data
+    confidence: HIGH

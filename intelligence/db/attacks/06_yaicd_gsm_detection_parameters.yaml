@@ -1,0 +1,177 @@
+---
+# RAYHUNTER THREAT ANALYZER — Detection Parameters Entry
+# ID: 06_yaicd_gsm_detection_parameters
+# Source: Ziayi, P., Farmanbar, S.M., Rezvani, M. (2021).
+#         "YAICD: Yet Another IMSI Catcher Detector in GSM."
+#         Security and Communication Networks, Vol. 2021, Article 8847803.
+#         Hindawi/Wiley. DOI: 10.1155/2021/8847803
+# Classification: OPEN_SOURCE — Peer-reviewed academic
+# Last Updated: Session 7
+
+title: "YAICD: 15-Parameter GSM IMSI-Catcher Detection Framework"
+citation_safe: true
+
+description: >
+  YAICD proposes 15 detection parameters extractable from GSM base station signals
+  without requiring root access or connection to the rogue BTS. Parameters are
+  observable from Android via baseband logs. Provides a systematic taxonomy of
+  GSM IMSI-Catcher behavioral signatures that complements Tucker et al.'s
+  message-ratio approach with behavioral/timing indicators.
+
+# ── THE 15 DETECTION PARAMETERS ──────────────────────────────────────────────
+detection_parameters:
+
+  P1_imsi_digits:
+    name: "IMSI Digits"
+    description: "ARFCN and IMSI digits of the cell"
+    anomaly: "Unexpected IMSI request from cell not in known-good database"
+    rayhunter_coverage: true
+
+  P2_imei_digits:
+    name: "IMEI Digits"
+    description: "IMEI digits requested by cell"
+    anomaly: "IMEI request without prior IMSI — indicates device fingerprinting"
+    rayhunter_coverage: true
+    julian_relevance: "Plaintext IMEISV exposure confirmed in Julian's captures"
+
+  P3_reject_after_id:
+    name: "Reject After ID Request"
+    description: >
+      If attacker only wants IMSI, they disconnect immediately after obtaining it.
+      Pattern: Identity Request → get IMSI → immediately reject/release.
+    anomaly: "Connection Release or Reject occurring within seconds of Identity Request"
+    rayhunter_coverage: true
+    forensic_note: >
+      This is the behavioral fingerprint of a pure IMSI-harvest operation.
+      The 210.2s RRCConnectionRelease cycle in Julian's captures fits this pattern —
+      connect, harvest IMSI, release, repeat on 210s timer.
+
+  P4_paging_without_followup:
+    name: "Paging Without Next Request"
+    description: >
+      Attacker pages UE to detect if target is in range, but does NOT process
+      next steps (no call setup, no SMS). Pure presence detection.
+    anomaly: "Paging message not followed by call/SMS setup within expected window"
+    rayhunter_coverage: "Partial — paging anomaly detector exists"
+    enhancement: "Add timeout check: paging not followed by voice/data within 30s = flag"
+
+  P5_channel_without_call:
+    name: "Channel Assignment Without Call/SMS"
+    description: >
+      Standard: after channel assignment, UE sends idle message, then call/SMS delivers.
+      Attack: attacker receives idle message, gets location fix, drops connection.
+    anomaly: "Channel assigned → idle message received → no call/SMS setup → release"
+    rayhunter_coverage: false
+    enhancement: "Channel-assignment-to-data-setup ratio detector"
+
+  P6_large_paging_groups:
+    name: "Large Number of Paging Groups"
+    description: >
+      Attacker sends invalid paging data continuously to force UE out of its cell
+      and into the rogue cell. Detectable as abnormally high paging channel density.
+    anomaly: "Paging group count significantly exceeds local network baseline"
+    rayhunter_coverage: true
+    julian_relevance: "390 Identity Requests in 120s — paging anomaly detector confirmed this"
+
+  P7_cipher_mode_delay:
+    name: "Delay in Cipher Mode Complete Validation"
+    description: >
+      Attacker delays response to Cipher Mode Complete to force UE to retransmit
+      in encrypted format. Attacker collects encrypted IMEISV with known plaintext
+      for cryptanalysis (Known-Plaintext Attack).
+    anomaly: "Cipher Mode Complete retransmission without ACK from BTS"
+    rayhunter_coverage: false
+    enhancement: "Cipher Mode Complete ACK timeout detector"
+    julian_relevance: "Confirms IMEISV exposure mechanism in captures"
+
+  P8_lai_mismatch:
+    name: "LAI Mismatch"
+    description: >
+      Rogue BTS broadcasts LAI that does not match the real network LAI for
+      the area. Forces Location Update to reveal IMSI.
+    anomaly: "LAI differs from OpenCellID/ACMA database for this Cell ID"
+    rayhunter_coverage: true
+    julian_relevance: "Modified LAI is Harris RayFish primary capture mechanism"
+
+  P9_arfcn_anomaly:
+    name: "ARFCN Anomaly"
+    description: >
+      Rogue BTS may operate on unexpected ARFCN for the claimed provider.
+      Detectable by cross-referencing ARFCN with provider frequency allocation.
+    anomaly: "ARFCN not in known provider frequency list for this location"
+    rayhunter_coverage: true
+
+  P10_rxlev_anomaly:
+    name: "Anomalous Signal Strength (RxLev)"
+    description: >
+      Rogue BTS often transmits at higher power than legitimate towers to attract UEs.
+      SeaGlass confirmed MSTXPWR=7 (vs normal 0-5) at SeaTac — forces high Tx power.
+    anomaly: "Signal strength significantly exceeds baseline for this location"
+    rayhunter_coverage: false
+    enhancement: "Signal strength baseline comparison against CellMapper data"
+
+  P11_t3212_anomaly:
+    name: "T3212 Timer Anomaly"
+    description: >
+      T3212 controls periodic Location Update interval. Normal: 9-10 (90-100 min).
+      SeaGlass confirmed T3212=66 at suspected StingRay location.
+      High T3212 forces frequent Location Updates — each one exposes IMSI.
+    anomaly: "T3212 value significantly above or below local network baseline"
+    seaglass_data: "T3212=66 at SeaTac airport anomaly vs normal 9-10"
+    rayhunter_coverage: false
+    enhancement: "T3212 baseline tracking — flag values >2 standard deviations from local mean"
+
+  P12_no_encryption:
+    name: "No Encryption (A5/0)"
+    description: >
+      GSM null cipher. Network forces A5/0 (no encryption) during cipher negotiation.
+      UE is not notified. Communications are in plaintext.
+    anomaly: "Cipher Mode Command with A5/0"
+    rayhunter_coverage: true
+    julian_relevance: "55,232 null-cipher violations (EEA0+EIA0) confirmed in captures"
+
+  P13_imsi_request_without_attach:
+    name: "IMSI Request Without Prior Attach"
+    description: >
+      Identity Request sent without prior Attach Request — unprovoked identity harvest.
+      Normal: Identity Request only occurs during Attach or TAU procedures.
+    anomaly: "Identity Request not preceded by Attach/TAU in same connection"
+    rayhunter_coverage: true
+
+  P14_multiple_identity_requests:
+    name: "Multiple Identity Requests (IMSI Flood)"
+    description: >
+      High rate of Identity Requests in short window indicates dragnet harvest.
+      Tucker et al. benchmark: <3% of connections. Julian: 195x this rate.
+    anomaly: "Identity Requests exceeding Tucker et al. 3% LTE threshold"
+    rayhunter_coverage: true
+    threshold: "Tucker et al. empirically validated 3% LTE / 6% GSM threshold"
+
+  P15_auth_reject_chain:
+    name: "Auth Reject → Identity Request Chain"
+    description: >
+      Authentication Reject followed by Identity Request = deliberate IMSI harvest sequence.
+      Authentication Reject deletes TMSI; subsequent Identity Request captures IMSI.
+    anomaly: "Auth Reject immediately followed by Identity Request in same session"
+    rayhunter_coverage: true
+    julian_relevance: "Auth Reject → Identity Request chain confirmed on BOTH Telstra and Vodafone"
+
+# ── DETECTION COVERAGE ASSESSMENT ────────────────────────────────────────────
+rayhunter_coverage_assessment:
+  covered: [P1, P2, P3, P4_partial, P6, P8, P9, P12, P13, P14, P15]
+  not_covered: [P5, P7, P10, P11]
+  coverage_percentage: "~73%"
+
+  enhancement_roadmap:
+    P5_channel_assignment: "Implement channel-to-data-setup ratio tracker"
+    P7_cipher_delay: "Implement Cipher Mode Complete ACK timeout detector"
+    P10_rxlev: "Implement CellMapper/OpenCellID signal strength baseline comparison"
+    P11_t3212: "Implement T3212 baseline tracking and anomaly flagging"
+
+sources:
+  - citation: "Ziayi, P., Farmanbar, S.M., Rezvani, M. (2021). YAICD: Yet Another IMSI
+      Catcher Detector in GSM. Security and Communication Networks, Vol. 2021,
+      Article 8847803. DOI: 10.1155/2021/8847803"
+    quality: MEDIUM
+    confidence: HIGH
+    open_source: true

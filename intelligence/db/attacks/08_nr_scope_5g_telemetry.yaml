@@ -1,0 +1,98 @@
+---
+# RAYHUNTER THREAT ANALYZER — Future Capability Entry
+# ID: 08_nr_scope_5g_telemetry
+# Source: Wan, H., Cao, X., Marder, A., Jamieson, K. (2024).
+#         "NR-Scope: A Practical 5G Standalone Telemetry Tool."
+#         CoNEXT 2024, December 9-12, Los Angeles, CA.
+#         Princeton University.
+# Classification: OPEN_SOURCE — Citation safe
+# Last Updated: Session 7
+
+title: "NR-Scope: 5G SA Passive Telemetry for IMSI-Catcher Detection"
+relevance: "FUTURE — 5G SA detection capability roadmap for Rayhunter Threat Analyzer"
+citation_safe: true
+
+description: >
+  NR-Scope is an open-source passive 5G Standalone (SA) network telemetry tool
+  that decodes RAN control channel messages (PDCCH/PDSCH) for all UEs without
+  requiring low-level cell information from users. Directly relevant to future
+  Rayhunter 5G detection capability.
+
+# ── KEY CAPABILITIES ──────────────────────────────────────────────────────────
+capabilities:
+  passive_monitoring: true
+  requires_root: false
+  requires_connection_to_cell: false
+  monitors_all_ues: true
+  hardware: "USRP B210 (Ettus Research) — same class as SDR used in academic research"
+
+  decodes:
+    - "Master Information Block (MIB)"
+    - "System Information Block 1 (SIB1)"
+    - "Physical Downlink Control Channel (PDCCH)"
+    - "Downlink Control Information (DCI) — per UE"
+    - "RACH procedure (MSG1-MSG4) — UE C-RNTI discovery"
+    - "RRC Setup messages"
+    - "Throughput per UE"
+    - "Retransmission patterns"
+
+  performance:
+    throughput_error: "<0.1%"
+    scales_linearly_with_radios: true
+    cpu_1_radio: "C498%"  # ~50% of documented value
+    memory_1_radio: "510MB"
+    cpu_2_radios: "134%"
+    memory_2_radios: "968MB"
+
+# ── 5G IMSI-CATCHER DETECTION IMPLICATIONS ────────────────────────────────────
+imsi_catcher_5g_implications:
+  current_state: >
+    5G SA networks use SUCI (Subscription Concealed Identifier) to conceal IMSI
+    in initial attach. However, pre-authentication downgrade attacks to LTE and
+    replay attacks (Karakoc et al. 2023) make IMSI-Catchers an enduring threat
+    in multi-generation networks.
+  suci_catcher: >
+    5G-specific IMSI-Catchers (SUCI-Catchers) have been reported but specific
+    mechanisms not yet fully disclosed publicly (per Tucker et al. 2025).
+    Braunschmied 2025 paper in project knowledge covers SUCI-Catcher countermeasures.
+
+  nr_scope_detection_potential:
+    sib1_anomaly_detection: >
+      NR-Scope decodes SIB1 which contains cell parameters. Anomalous SIB1
+      values (unexpected cell configuration, mismatched PLMN) indicate rogue gNB.
+    rach_ratio_tracking: >
+      Tucker et al. IMSI Exposure Ratio methodology applies to 5G SA with NR-Scope.
+      High ratio of RACH procedures with subsequent Identity Requests = IMSI-Catcher.
+    dci_pattern_analysis: >
+      Anomalous DCI patterns (e.g., unexpected scheduling behavior) may indicate
+      rogue gNB operating without proper core network connection.
+
+# ── NSA VS SA DETECTION DIFFERENCE ───────────────────────────────────────────
+nsa_vs_sa:
+  nsa_5g:
+    note: >
+      5G NSA (Non-Standalone) uses LTE as anchor. SIB information is not
+      broadcast by 5G NSA — provided through LTE cells under encryption.
+      NR-Scope requires manual cell information input for NSA.
+    implication: "Current Rayhunter setup captures NSA traffic via LTE layer"
+  sa_5g:
+    note: >
+      5G SA broadcasts SIBs openly — NR-Scope can decode without extra info.
+    implication: "Future 5G SA Rayhunter capability requires USRP + NR-Scope"
+
+# ── INTEGRATION ROADMAP ────────────────────────────────────────────────────────
+integration_roadmap:
+  current_rayhunter: "LTE-only via Rayhunter on TP-Link M7350"
+  next_step: >
+    Add 5G SA monitoring via USRP B210 + NR-Scope running on Raspberry Pi 5.
+    NR-Scope outputs to pcap — compatible with existing Rayhunter Threat Analyzer
+    pcap_parser.py and pcap_exporter.py modules.
+  estimated_cost_aud: "~$800-1200 for USRP B210 equivalent (e.g., LimeSDR Mini 2.0)"
+  software: "NR-Scope open source — https://github.com/PrincetonUniversity/NR-Scope"
+
+sources:
+  - citation: "Wan, H., Cao, X., Marder, A., Jamieson, K. (2024). NR-Scope: A Practical
+      5G Standalone Telemetry Tool. CoNEXT 2024, Los Angeles."
+    quality: HIGH
+    confidence: HIGH
+    open_source: true
