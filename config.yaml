@@ -1,18 +1,20 @@
 # =============================================================================
 # Rayhunter Threat Analyzer — Configuration
 # =============================================================================
-# v2.2 — added heuristic_scorer and rrc_periodicity blocks
+# v2.4 — PagingTargetDetector + CIDRotationDetector added
+#         corrected base_quantum_seconds: 10.880 (was 10.94)
+#         full rogue CID list including CID rotation cluster
 
 network:
-  mcc: "505"          # Australia
-  mnc: "001"          # Telstra AU (use --mnc 003 for Vodafone AU)
-  mnc_telstra: "001"
+  mcc: "505"           # Australia
+  mnc: "001"           # Telstra AU (use --mnc 003 for Vodafone AU)
+  mnc_telstra:  "001"
   mnc_vodafone: "003"
   country: "AU"
 
 opencellid:
-  enabled: false      # Set true and add api_key for live CID verification
-  api_key: ""
+  enabled:    false    # Set true and add api_key for live CID verification
+  api_key:    ""
   cache_days: 7
 
 intelligence:
@@ -22,37 +24,52 @@ detection:
 
   identity_harvest:
     window_seconds: 120
-    max_requests: 2           # 3GPP TS 24.301 max 2 per attach procedure
-    flag_imeisv: true         # IMEISV = YAICD P7 score 2.0
+    max_requests:   2        # 3GPP TS 24.301 max 2 per attach procedure
+    flag_imeisv:    true     # IMEISV = YAICD P7 score 2.0
 
   cipher_downgrade:
-    flag_eea0: true           # EEA0 = null LTE encryption
-    flag_eia0: true           # EIA0 = null LTE integrity (TS 33.401 violation)
-    flag_a5_0: true           # A5/0 = null GSM encryption
+    flag_eea0: true          # EEA0 = null LTE encryption
+    flag_eia0: true          # EIA0 = null LTE integrity (TS 33.401 violation)
+    flag_a5_0: true          # A5/0 = null GSM encryption
 
   rrc_periodicity:
-    cycle_seconds: 210.2      # srsRAN 23.04 / OpenAirInterface default
-    tolerance_seconds: 15.0   # Jitter window around target
-    min_observations: 3       # Minimum intervals to trigger
-    sd_threshold_ms: 200      # Machine-precision threshold (SD < 200ms)
-    harris_t1_seconds: 610.6  # HailStorm T1 signature
-    harris_t1_tolerance: 5.0  # Tolerance for T1 check
+    cycle_seconds:       210.2    # srsRAN 23.04 / OpenAirInterface default
+    tolerance_seconds:   15.0     # Jitter window around target
+    min_observations:    3        # Minimum intervals to trigger
+    sd_threshold_ms:     200      # Machine-precision threshold (SD < 200ms)
+    harris_t1_seconds:   610.6    # HailStorm T1 signature
+    harris_t1_tolerance: 5.0      # Tolerance for T1 check
 
   rogue_tower:
     cross_carrier_gap_seconds: 1.0
-    min_rogue_cid_events: 2
-    # Known confirmed rogue CIDs from Cranbourne East investigation
+    min_rogue_cid_events:      2
+    # -------------------------------------------------------------------------
+    # Confirmed rogue CIDs — Cranbourne East investigation
+    # Case refs: CIRS-20260331-141, ENQ-1851DVJH04, TIO 2026-03-04898
+    # -------------------------------------------------------------------------
     known_rogue_cids:
-      - "137713195"
-      - "137713155"
-      - "137713175"
-      - "137713185"
+      # Telstra TAC=12385 — CID rotation cluster (evasion technique)
+      - "137713195"   # Primary — highest observation count
+      - "137713175"   # Confirmed — geo-located ~331m from home
+      - "137713165"   # High frequency — rotation cluster
+      - "137713155"   # High frequency — rotation cluster
+      - "137713185"   # Confirmed — rotation cluster
+      - "135836191"   # Novel CID — transient 21ms burst, first seen 23 May 2026
+      # Vodafone TAC=30336
+      - "8409357"     # High frequency
+      - "8409367"     # Confirmed
+      - "8409387"     # Confirmed
+      - "8409397"     # Anomalous — rapid sub-2s departures, medium priority
+      # Post-ACMA-visit — zero global OpenCelliD observations
+      - "8666381"
+      - "8666391"
+      - "8666411"
 
   earfcn_anomaly:
     flag_nonstandard: true
     # Known rogue EARFCNs confirmed in Cranbourne East captures
     known_rogue_earfcns:
-      - 16384    # Outside all standard 3GPP TS 36.101 LTE band tables
+      - 16384   # Outside all standard 3GPP TS 36.101 LTE band tables
       - 450
       - 550
       - 1275
@@ -62,31 +79,61 @@ detection:
       - 9410
 
   # ---------------------------------------------------------------------------
+  # Paging Target Detector — v2.4
+  # Flags devices under machine-precision targeted paging
+  # ---------------------------------------------------------------------------
+  paging_target:
+    min_pages_to_analyse:   50     # ignore m-TMSIs with fewer pages
+    critical_page_count:   150     # above this → CRITICAL severity
+    base_quantum_seconds:   10.880 # confirmed from 402-event d8736117 dataset
+    base_window_lo:          9.0   # lower bound of quantum window
+    base_window_hi:         13.0   # upper bound of quantum window
+    base_count_for_confirmed: 40   # occurrences for CONFIRMED confidence
+    sd_for_confirmed:        2.0   # SD threshold for CONFIRMED
+    top_n_targets:           8     # report top N m-TMSIs
+
+  # ---------------------------------------------------------------------------
+  # CID Rotation Detector — v2.4
+  # Flags deliberate CID rotation within a TAC (rogue evasion technique)
+  # ---------------------------------------------------------------------------
+  cid_rotation:
+    min_cids_for_rotation:    3     # need at least N distinct CIDs in one TAC
+    min_events_per_cid:       3     # each CID must appear at least this many times
+    rotation_window_seconds: 7200   # look for rotation within 2-hour window
+    suffix_step_threshold:    50    # CIDs within N units = numerically adjacent
+    min_transitions:          4     # minimum CID changes to flag as rotation
+
+  # ---------------------------------------------------------------------------
+  # Proximity Track Detector
+  # ---------------------------------------------------------------------------
+  proximity_track:
+    spike_threshold_db:    15.0
+    extreme_rsrp_dbm:     -85.0
+    sustained_rsrp_dbm:   -95.0
+    sustained_min_events:   3
+    multi_cid_min:          2
+    multi_cid_rsrp_dbm:  -100.0
+    multi_cid_window_s:   120.0
+
+  # ---------------------------------------------------------------------------
   # Heuristic Scorer — 10-Heuristic IMSI Catcher Detection Framework
   # Sources: Dabrowski 2014, IMSI Catchers Survey 2015, Ziayi 2021,
   #          Kareem 2023, Sumailov 2023, Enea 2024
   # ---------------------------------------------------------------------------
   heuristic_scorer:
-    # Minimum IMSI/IMEISV requests to score P7 (Ziayi et al. 2021)
-    # Set to 2 — IdentityHarvestDetector already requires >2 to fire
-    imeisv_min_events: 2
-
-    # Maximum EEA0 events allowed for transparent-proxy confirmation
-    # 0 = strict (any EEA0 = not full transparent proxy mode)
+    imeisv_min_events:              2
     eea0_max_for_transparent_proxy: 0
-
-    # Persistence thresholds for heuristic 4.1.9 (inverted)
-    persistence_days_professional: 90    # >90 days = PARTIAL confirmation
-    persistence_days_harris: 300         # >300 days = CONFIRMED (federal grade)
+    persistence_days_professional:  90
+    persistence_days_harris:       300
 
 reporting:
-  severity_levels: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
-  min_severity: "LOW"
-  include_raw_events: false
-  timestamp_format: "%Y-%m-%d %H:%M:%S UTC"
+  severity_levels:     ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+  min_severity:        "LOW"
+  include_raw_events:  false
+  timestamp_format:    "%Y-%m-%d %H:%M:%S UTC"
 
 hardware_fingerprint:
-  confidence_threshold: 0.3
-  harris_t1_seconds: 610.6
-  harris_t1_tolerance_seconds: 5.0
+  confidence_threshold:             0.3
+  harris_t1_seconds:               610.6
+  harris_t1_tolerance_seconds:       5.0
   harris_persistence_threshold_days: 300
