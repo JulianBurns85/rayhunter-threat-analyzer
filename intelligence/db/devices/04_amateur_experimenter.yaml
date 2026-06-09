@@ -1,0 +1,62 @@
+# =============================================================================
+# Device Profile: Amateur / Research SDR IMSI Catcher
+# =============================================================================
+# File: intelligence/db/devices/04_amateur_experimenter.yaml
+#
+# Covers: YateBTS + BladeRF, OpenBTS + LimeSDR, gr-gsm + RTL-SDR
+# Sources:
+#   Sumailov "Rogue Mobile Phone Base Station" Univ. Tartu BSc 2023
+#   Papadopoulos "Security Assessment of GSM Um Interface" Piraeus MSc 2021
+#   Dabrowski et al. ACSAC 2014
+# =============================================================================
+
+device_id: "amateur_experimenter"
+name: "Amateur / Research SDR (YateBTS / OpenBTS)"
+vendor: "Open Source — various"
+type: "amateur_sdr"
+cost_range_usd: [500, 2000]
+access_tier: "Public"
+
+capabilities:
+  lte_support: false             # Most amateur setups are 2G/GSM only
+  gsm_support: true
+  multi_carrier: false
+  transparent_proxy: false
+  direction_finding: false
+  silent_intercept: false
+  max_concurrent_targets: 10     # Limited by SDR hardware
+
+typical_hardware:
+  - "BladeRF xA4 (~540 EUR)"
+  - "LimeSDR Mini (~139 USD)"
+  - "RTL-SDR V3 (~30 USD, receive only)"
+  - "HackRF One (~300 USD)"
+
+limitations:
+  - "Modern phones prefer 4G over 2G rogue BTS (Sumailov 2023)"
+  - "Cannot operate native LTE without significant additional tooling"
+  - "Cannot operate on multiple carriers simultaneously"
+  - "No transparent proxy — EEA0 always negotiated in MitM mode"
+  - "Impractical for >30 day continuous unattended operation"
+  - "Faraday cage required for controlled testing (Sumailov 2023)"
+
+discriminators:
+  confirms:
+    - forced_2g_downgrade        # Must jam LTE to force 2G connection
+    - eea0_present
+    - single_carrier_only
+    - short_lifetime             # Impractical long-term
+  excludes:
+    - zero_eea0
+    - cross_carrier_simultaneous
+    - metronomic_610s
+    - persistence_90_days
+
+detection_notes: >
+  Sumailov (2023) experimentally confirmed that in areas with existing
+  4G coverage, modern smartphones will NOT connect to a 2G rogue BTS
+  regardless of signal strength. Amateur setups therefore require either:
+  (a) LTE jamming — produces detectable artefacts, illegal under AU
+      Radiocommunications Act 1992, or
+  (b) Areas with no 4G coverage (tunnels, remote areas).
+  Neither scenario is consistent with 506-day residential surveillance.

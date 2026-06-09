@@ -1,0 +1,148 @@
+# =============================================================================
+# 10-Heuristic IMSI Catcher Detection Framework
+# =============================================================================
+# File: intelligence/db/attacks/10_heuristic_framework.yaml
+#
+# NOTE: A copy of this file was placed in intelligence/ by mistake.
+#       This is the canonical location. The intelligence/ copy can be deleted.
+#
+# Sources:
+#   Dabrowski et al. "IMSI-Catch Me If You Can" ACSAC 2014
+#   "IMSI Catchers: A Survey" (2015)
+#   Ziayi et al. "YAICD" Security and Communication Networks 2021
+#   Kareem "Impact of IMSI Catcher Deployments" IJRITCC 2023
+#   Sumailov "Rogue Mobile Phone Base Station" Univ. Tartu BSc 2023
+#   Enea "Location Tracking on the Battlefield" 2024
+#   Harris GCSD Price List Sep 2008 (primary source, leaked)
+# =============================================================================
+
+attack_id: "H-FRAMEWORK-001"
+name: "10-Heuristic IMSI Catcher Detection Framework"
+version: "1.1"
+category: "detection_framework"
+last_updated: "2026-05-10"
+
+yaicd_scoring:
+  threshold: 2.6
+  parameters:
+    P7_imeisv_harvest:         2.0
+    P14_t3212_anomaly:         1.5
+    P9_unusual_lac:            0.5
+    P10_cross_carrier_release: 1.0
+
+heuristics:
+
+  - id: "4.1.1"
+    label: "Off-Band EARFCN"
+    detector_field: "earfcn_anomaly"
+    description: >
+      IMSI catchers operate on frequencies outside standard 3GPP TS 36.101
+      band allocations to improve signal isolation.
+    cranbourne_east: >
+      EARFCN 16384 confirmed — outside all standard LTE band tables.
+      Also observed: 450, 550, 1275, 1406, 1550, 3148, 9410.
+    confirms_profiles: ["harris_commercial_lte_periodic", "srsran_automated"]
+    yaicd_param: null
+
+  - id: "4.1.2"
+    label: "Unusual Cell ID"
+    detector_field: "rogue_tower"
+    description: >
+      Cell IDs not registered in official operator databases or OpenCelliD.
+    cranbourne_east: >
+      8 rogue CIDs confirmed on Telstra TAC=12385 and Vodafone TAC=30336.
+    confirms_profiles:
+      - "harris_commercial_lte_periodic"
+      - "srsran_automated"
+      - "cheap_commercial"
+    yaicd_param: null
+
+  - id: "4.1.3"
+    label: "Unusual Base Station Parameters"
+    detector_field: "rrc_periodicity"
+    description: >
+      Timer values deviate from legitimate carrier baseline.
+      Metronomic precision = automated software scheduling.
+    cranbourne_east: >
+      T3 210.182s SD 0.138ms, 333 events. Harris T1 610.6s confirmed.
+    confirms_profiles: ["harris_commercial_lte_periodic", "srsran_automated"]
+    yaicd_param: "P14_t3212_anomaly"
+    yaicd_score: 1.5
+
+  - id: "4.1.4"
+    label: "RF Jamming / Forced 2G Downgrade Absent"
+    inverted: true
+    description: >
+      Sumailov (2023): modern phones prefer 4G over rogue 2G BTS.
+      Transparent proxy = only silent LTE interception method.
+      EEA0 on LTE is a SEPARATE indicator (4.1.6).
+    cranbourne_east: "Zero forced-downgrade events across 506 days."
+    confirms_profiles: ["harris_commercial_lte_periodic"]
+    excludes_profiles: ["srsran_automated", "cheap_commercial", "amateur_experimenter"]
+    yaicd_param: null
+
+  - id: "4.1.5"
+    label: "Inter-Operating Attack (GSM/UMTS downgrade)"
+    not_applicable_for: ["harris_commercial_lte_periodic"]
+    description: "Harris HailStorm native LTE — not required."
+    yaicd_param: null
+
+  - id: "4.1.6"
+    label: "EEA0 Null-Cipher"
+    detector_field: "cipher_downgrade"
+    description: >
+      Confirms in both directions:
+      EEA0 present = MitM null-cipher attack (non-proxy).
+      EEA0 absent  = transparent proxy mode (Harris RayFish).
+    cranbourne_east: "ZERO EEA0 across 506 days — transparent proxy."
+    yaicd_param: null
+
+  - id: "4.1.7"
+    label: "Empty/Invalid Neighbour List"
+    detector_field: "rogue_tower"
+    description: "IMSI catchers broadcast empty lists to prevent handover."
+    cranbourne_east: "Anomalies observed; QMDL decode required to confirm."
+    yaicd_param: null
+
+  - id: "4.1.8"
+    label: "Traffic Forwarding (Proxy Mode)"
+    detector_field: "cipher_downgrade"
+    description: >
+      Transparent proxy: zero EEA0 + zero forced-downgrade.
+      Non-proxy MitM: null-cipher SMC events present.
+    cranbourne_east: >
+      Transparent proxy confirmed. Harris RayFish Silent/Covert
+      (Federal-only — GCSD 2008 SRAY-GSM-SW-INTCP-SC).
+    yaicd_param: null
+
+  - id: "4.1.9"
+    label: "Short Base Station Lifetime (INVERTED)"
+    inverted: true
+    description: >
+      >90 days = professional. >300 days = Harris-class federal.
+    cranbourne_east: "506 days — federal deployment grade."
+    thresholds:
+      professional_days: 90
+      harris_class_days: 300
+    yaicd_param: null
+
+  - id: "4.1.10"
+    label: "Changing / Inconsistent LAC"
+    detector_field: "rogue_tower"
+    description: >
+      IMSI catchers alter LAC to force Location Updates.
+      Cross-carrier (Telstra + Vodafone) = Harris 4-CH Multi-Xmit.
+    cranbourne_east: >
+      Rogue CIDs on both carriers. Cross-carrier simultaneous release
+      April 7-9 2026 (zero-second gap).
+    yaicd_param: "P10_cross_carrier_release"
+    yaicd_score: 1.0
+
+additional_yaicd_params:
+  - param: "P7_imeisv_harvest"
+    score: 2.0
+    detector_field: "identity_harvest"
+    description: "IMEISV/IMSI collection events >= 2 per attach."
+    cranbourne_east: >
+      360 IMSI requests in 120s window (Apr 2026).
+      7 unprovoked requests with no preceding Attach confirmed.

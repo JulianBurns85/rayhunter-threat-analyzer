@@ -1,0 +1,123 @@
+# =============================================================================
+# Harris Catch-and-Release Operational Profiles
+# =============================================================================
+# File: intelligence/db/devices/05_catch_release_hard_landing.yaml
+#
+# Documents Harris RayFish Controller operational modes extracted from
+# leaked technical documentation. Used by HardwareFingerprinter to
+# match observed timing patterns to specific Harris operational states.
+#
+# Sources:
+#   Harris RayFish Controller R3.3.1 Release Notes (leaked)
+#   Harris Gemini 3.3 Quick Start Guide (leaked)
+#   Harris Arrowhead 1.0.1 (leaked)
+# =============================================================================
+
+profile_set_id: "harris_catch_release_modes"
+name: "Harris RayFish Catch-and-Release Operational Profiles"
+version: "1.0"
+
+# ---------------------------------------------------------------------------
+# Phase definitions observed in Cranbourne East captures
+# ---------------------------------------------------------------------------
+
+phases:
+
+  - phase_id: "phase_1_baseline"
+    label: "Phase 1 — Baseline (Long Cycle)"
+    observed: "Nov 2024 — ~28 Jan 2026"
+    duration_days: ~85
+    t3_cycle_s: 3000             # ~50-minute catch-and-release
+    t3_sd_s: null                # Not yet analysed in detail
+    interpretation: >
+      Initial deployment phase. Long T3 timer = infrequent catch cycles.
+      Device establishing baseline coverage and periodic IMSI sweeps.
+      Consistent with pre-targeting reconnaissance phase.
+
+  - phase_id: "phase_2_intensified"
+    label: "Phase 2 — Intensified Targeting (210.2s Metronomic)"
+    observed: "~28 Jan 2026 — 7 May 2026"
+    duration_days: ~99
+    t3_cycle_s: 210.182
+    t3_sd_ms: 0.138
+    t3_events: 333
+    interpretation: >
+      Deliberate reconfiguration to 210.2s cycle. Machine-precision SD
+      (0.138ms) confirms RayFish Controller automated scheduling.
+      Transition from ~3000s to 210.2s represents 14x increase in
+      catch frequency — consistent with intensified targeting of a
+      specific IMSI (Rayhunter unit's s-TMSI).
+      RayFish T3 configuration: catch -> release -> catch at 210.2s intervals.
+
+  - phase_id: "phase_3_post_acma"
+    label: "Phase 3 — Post-ACMA Visit (Chaotic T3)"
+    observed: "8 May 2026 — present"
+    t3_cycles_observed: [84, 979, 1253, 40.096]
+    t1_s: 610.6                  # Unchanged — core HailStorm infrastructure
+    interpretation: >
+      Operator aware of regulatory attention (ACMA field visit 8 May 2026).
+      T3 made deliberately chaotic to obscure metronomic signature.
+      T1 (610.6s HailStorm signature) unchanged — operator confident
+      in core infrastructure security.
+      40.096s artefact = Vodafone profile applied briefly to Telstra device
+      — operator cycling through RayFish saved carrier profiles live.
+
+# ---------------------------------------------------------------------------
+# T3 phase transition matrix
+# ---------------------------------------------------------------------------
+
+t3_transitions:
+  - from_s: 3000
+    to_s: 210.182
+    date: "~2026-01-28"
+    significance: >
+      14x increase in catch frequency. Indicates new operational directive
+      or updated target profile loaded into RayFish Controller.
+
+  - from_s: 210.182
+    to_s: "chaotic (84/979/1253/40)"
+    date: "2026-05-08"
+    significance: >
+      Immediate response to ACMA field visit. Operator has intelligence
+      access — received advance notice of regulatory action.
+
+# ---------------------------------------------------------------------------
+# Harris cross-carrier LTE profile — per-carrier saved configurations
+# ---------------------------------------------------------------------------
+
+carrier_profiles:
+  - profile_id: "harris_commercial_lte_periodic_telstra"
+    mnc: "001"
+    carrier: "Telstra AU"
+    tac: 12385
+    observed_cids: ["137713195", "137713155", "137713175", "137713185"]
+    t3_s: 210.182
+
+  - profile_id: "harris_commercial_lte_periodic_vodafone"
+    mnc: "003"
+    carrier: "Vodafone AU"
+    tac: 30336
+    observed_cids: ["8409357", "8409367", "8409387", "8409397"]
+    t3_s: 210.182
+    note: >
+      40.096s artefact (post-ACMA) = Vodafone profile applied to Telstra
+      device. Confirms RayFish has separate saved profiles per carrier
+      and operator was cycling profiles live during the ACMA visit.
+
+# ---------------------------------------------------------------------------
+# Hard landing indicators (catch-release failure modes)
+# ---------------------------------------------------------------------------
+
+hard_landing_indicators:
+  description: >
+    A "hard landing" occurs when the target device fails to re-attach
+    after a RayFish catch-and-release cycle, resulting in visible
+    network disruption. Hard landings are avoided in transparent proxy
+    mode but may occur during profile switching or timer changes.
+
+  observed_artefacts:
+    - ts_approx: "2026-05-08 post-ACMA"
+      artefact: "40.096s T3 — Vodafone profile on Telstra carrier"
+      interpretation: >
+        Profile mismatch during live carousel. Operator corrected rapidly.
+        Artefact duration <1 cycle confirms real-time RayFish console access.

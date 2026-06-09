@@ -1,0 +1,206 @@
+# Harris Commercial LTE IMSI Catcher Profile — Updated 2026-05-22
+# Placement: intelligence/db/attackers/harris_commercial_lte_updated.yaml
+#
+# Updated with confirmed forensic findings from Cranbourne East investigation
+# and FlashCatch signature from WiSec 2025 research.
+
+meta:
+  name: "Harris Commercial LTE + FlashCatch Profiles"
+  version: 2.0
+  date: "2026-05-22"
+  investigator: "Julian Burns"
+  case_refs:
+    - "VicPol CIRS-20260331-141"
+    - "ACMA ENQ-1851DVJH04"
+    - "TIO 2026-03-04898"
+    - "AFP referral via DSC Cameron Burns (Badge 38739)"
+
+# ============================================================
+# Profile 1: Harris HailStorm / StingRay II (MitM Proxy Mode)
+# ============================================================
+harris_hailstorm_mitm:
+  name: "Harris HailStorm / StingRay II — MitM Proxy"
+  danger_score: 9
+  confidence: "HIGH"
+  
+  description: >
+    Commercial-grade cell site simulator operating as a Man-in-the-Middle
+    proxy between target devices and the legitimate network. Forwards
+    authentication to the real network and derives session keys, enabling
+    strong encryption (EEA2/EIA2) while maintaining full interception capability.
+    
+  timer_signatures:
+    - id: "T3"
+      type: "RRCConnectionRelease"
+      period_s: 210.248
+      sd_s: 1.225
+      source: "Session 1656131 — 117/165 intervals"
+      p_value: "10^-166"
+      fft_snr: 27.7
+      description: >
+        Harris "Catch and Release / Hard Landing" timer.
+        Confirmed from leaked Harris operator manuals (The Intercept, 2016).
+        Longest consecutive streak: 36 releases (2+ hours unbroken).
+      
+    - id: "T4"  
+      type: "RRCConnectionReconfiguration"
+      period_s: 88.1
+      sd_s: 0.849
+      source: "Sessions 1802369, 1799191"
+      fft_snr: 7.5
+      description: >
+        Sub-cycle measurement reconfiguration timer within the T3 release cycle.
+        May represent forced measurement sweep cadence.
+        Confirmed across two independent captures.
+
+    - id: "T1"
+      type: "RRCConnectionRelease"
+      period_s: 120.0
+      sd_s: null  # Multi-modal — alternating 40/80/120
+      source: "Session 1254835 — 42/121 intervals"
+      description: >
+        Vodafone carrier release cycle. Alternates between ~40s, ~80s, and ~120s
+        intervals suggesting a different operational mode or carrier-specific
+        timer configuration.
+
+  indicators:
+    authentication:
+      description: "Near-zero authentication rate"
+      observed_telstra: "1.2% (2/168 connections)"
+      observed_vodafone: "8.2% (10/119 connections)"
+      aggregate: "4.1% (13/317 connections)"
+      expected_legitimate: ">90% for Attach, variable for Service Request"
+      
+    cipher:
+      algorithm: "EEA2/EIA2"
+      description: >
+        Strong AES-128 encryption on ALL 317 SecurityModeCommands across
+        all 7 PCAPs. Consistent with MitM proxy that forwards authentication
+        to the real network and derives session keys.
+      note: "NOT null cipher (EEA0) — rules out naive IMSI grabber"
+      
+    measurement_reporting:
+      interval_s: 5.163
+      interval_sd_s: 0.336
+      description: >
+        Forced reportInterval=ms5120 (5.12s). Normal cells use 120-240s.
+        Confirmed across two independent Vodafone PCAPs.
+      purpose: "Tracking-grade continuous RF environment monitoring"
+      
+    guti_reallocation:
+      vodafone: "ZERO across 139 connections"
+      telstra: "2.3% (4/172 connections)"
+      description: >
+        Legitimate networks periodically reallocate GUTIs to prevent tracking.
+        Zero reallocation on Vodafone suggests no real MME behind the cell.
+        Low but non-zero on Telstra suggests MitM proxy forwarding some reallocations.
+      
+    cross_carrier:
+      description: "Simultaneous operation on Telstra and Vodafone"
+      evidence:
+        - "May 15: Vodafone 1254835 + Telstra 1255552 overlap 7+ hours"
+        - "May 20-21: Vodafone 1655238 + Telstra 1656131 overlap 40+ hours"
+        - "Both carriers terminate within minutes of each other (May 21 ~18:05 UTC)"
+      implication: >
+        Multi-carrier simultaneous operation consistent with HailStorm (4 Tx ports)
+        or StingRay II (multi-carrier capability). Eliminates srsRAN (single carrier).
+        
+    paging_volume:
+      telstra_40h: "95,694 unique m-TMSI values"
+      telstra_38min: "1,385 unique m-TMSI values"
+      vodafone_8h: "7,597 unique m-TMSI values"
+
+  disqualifying_for:
+    - "srsRAN (single-carrier, no MitM proxy, uses EEA0)"
+    - "Naive IMSI grabber (would use EEA0, no persistent timer)"
+    - "Cel-Fi repeater (doesn't create new CIDs or eNBs)"
+
+  compatible_with:
+    - "Harris HailStorm (multi-carrier MitM, 210s timer)"
+    - "Harris StingRay II (4 Tx ports, multi-carrier)"
+    - "PKI 1625 (multi-carrier commercial device)"
+    - "Cobham/Septier commercial IMSI catcher"
+
+# ============================================================
+# Profile 2: FlashCatch Sub-Second Probe
+# ============================================================
+flashcatch_probe:
+  name: "FlashCatch-class Sub-Second IMSI Capture"
+  danger_score: 8
+  confidence: "HIGH"
+  
+  description: >
+    Sub-second IMSI capture technique matching FlashCatch methodology
+    (Paci et al., WiSec 2025). Appears briefly on the target frequency,
+    captures IMSI via immediate Identity Request, then triggers cell barring
+    via intentional authentication failure so the UE never reconnects.
+  
+  observed_signature:
+    cid: 135836191
+    enb: 530610
+    band: 7
+    frequency: "2600 MHz"
+    duration_s: 0.521
+    observations: 3
+    same_band_as_home: true
+    home_enb: 537942
+    home_cid_same_band: 137713195
+    
+  phase1_indicators:
+    - "CID appeared for 0.521 seconds (sub-second = FlashCatch Phase 1)"
+    - "Different eNB (530610) from home tower (537942)"
+    - "Same Band 7 as primary home cell — frequency displacement"
+    - "Never observed before or after — cell barring effect"
+    - "3 SIB1 beacons in 0.521s then vanished"
+    
+  phase2_indicators:
+    - "Authentication Reject observed in temporal proximity"
+    - "CID permanently absent from all subsequent sessions"
+    - "Consistent with 3GPP TS 24.301 cell barring after auth failure"
+
+  reference:
+    paper: "FlashCatch: Minimizing Disruption in IMSI Catcher Operations"
+    authors: "Paci, Bologna, Palamà, Bianchi"
+    venue: "ACM WiSec 2025"
+    doi: "10.1145/3734477.3734705"
+    key_finding: >
+      Lab experiments on 7 devices demonstrated sub-second IMSI retrieval
+      with seamless service continuity. Reduces capture time by 200x and
+      disruption by 50x vs naive approach.
+
+# ============================================================
+# Profile 3: Anomalous Vodafone Sector 
+# ============================================================
+vodafone_anomalous_sector:
+  name: "Anomalous Vodafone CID 8409397 (Sector 53, Band 5)"
+  danger_score: 5
+  confidence: "MEDIUM"
+  
+  description: >
+    CID 8409397 on eNB 32849 uses sector number 53 (0x35) and operates on
+    Band 5 (850 MHz), while the other three sectors on the same eNB use
+    sectors 13/23/43 on Bands 1/3. The unusual sector number and different
+    frequency band suggest this may be a fifth radio element or a
+    frequency-agile scanning port on a multi-carrier device.
+    
+  observed:
+    cid: 8409397
+    enb: 32849
+    sector: 53
+    sector_hex: "0x35"
+    band: 5
+    frequency: "850 MHz"
+    total_observations: 11
+    sessions_present: 4
+    burst_pattern: "3 observations in 79ms (session 1343058)"
+    
+  sibling_sectors:
+    - {cid: 8409357, sector: 13, band: 3}
+    - {cid: 8409367, sector: 23, band: null}
+    - {cid: 8409387, sector: 43, band: 1}
+    
+  indicators:
+    - "Unusual sector number (53) vs siblings (13, 23, 43)"
+    - "Different frequency band (5/850MHz) vs siblings (1, 3)"
+    - "Low observation count (11 total across 4 sessions)"
+    - "Sub-100ms burst pattern in session 1343058"

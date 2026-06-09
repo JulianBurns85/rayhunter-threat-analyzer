@@ -1,0 +1,90 @@
+# FlashCatch — WiSec 2025 Research Intelligence
+# Source: Paci, Bologna, Palamà, Bianchi et al. (2025).
+#         "FlashCatch: Minimizing Disruption in IMSI Catcher Operations"
+#         WiSec 2025. DOI: 10.1145/3734477.3734705
+# Classification: OPEN_SOURCE — Citation safe
+# Last updated: 2026-05-22
+# FORENSIC RELEVANCE: HIGH — describes evasion techniques detectable by RTA
+
+title: "FlashCatch — Advanced IMSI Catcher Evasion Technique (2025)"
+authors: "Paci, Bologna, Palamà, Bianchi, Albanese, da Silva, Ranganathan, Seifert"
+venue: "WiSec 2025 (18th ACM Conference on Security and Privacy in Wireless Networks)"
+doi: "10.1145/3734477.3734705"
+year: 2025
+citation_safe: true
+
+threat_summary: >
+  FlashCatch is a 2025 academic paper demonstrating an advanced IMSI catcher
+  technique that dramatically reduces service disruption (and therefore detection
+  likelihood) compared to naive IMSI catcher operation.
+
+  Key capabilities demonstrated:
+  - IMSI capture time reduced by 200x over naive approach
+  - Service disruption reduced by 50x
+  - Sub-second IMSI retrieval achieved
+  - Ongoing calls resume without termination
+  - UE security context preserved (enabling TMSI linkability attacks)
+  - Validated on 7 devices across 3 baseband manufacturers
+  - Field tested with 50 volunteers
+
+attack_mechanism:
+  phase_1_fast_identity_retrieval:
+    description: >
+      FlashCatch bypasses the need for a full attach procedure by exploiting
+      3GPP standard protocol state machine vulnerabilities. Extracts IMSI
+      without forcing a full re-attach cycle, reducing the identity retrieval
+      window from seconds to sub-second.
+    detection_note: >
+      This technique may evade Identity Request flood detection if the
+      request count is very low (potentially 1 request per target).
+      IE Ratio (Marlin methodology) would still detect this.
+
+  phase_2_clean_detachment:
+    description: >
+      Uses intentional authentication failures to induce rapid switch back
+      to legitimate cell. Bars the fake cell from further reconnection.
+      This eliminates the telltale "device stuck on rogue cell" indicator.
+    detection_note: >
+      Auth Reject → Identity Request chain STILL occurs in FlashCatch.
+      The RTA AuthRejectChain detector would fire on this sequence.
+      The difference is timing — FlashCatch does it faster.
+
+  phase_3_tmsi_linkability:
+    description: >
+      FlashCatch preserves the UE's security context including TMSI,
+      enabling subsequent passive tracking without further IMSI exposure.
+    detection_note: >
+      This passive tracking phase produces NO detectable signals in
+      Rayhunter captures — it operates on passive downlink monitoring.
+
+implications_for_detection:
+  what_still_works:
+    - "Auth Reject → Identity Request chain (compressed timing)"
+    - "IE Ratio calculation (Marlin) — even 1 Identity Request in session is anomalous"
+    - "Cross-carrier simultaneous operation (FlashCatch still requires rogue eNodeB)"
+    - "Metronomic timer detection (FlashCatch eNodeB still uses software timers)"
+    - "EARFCN anomaly detection"
+
+  what_becomes_harder:
+    - "Identity Request flood detection (may be only 1 request per target)"
+    - "Service disruption indicators (FlashCatch minimizes these)"
+    - "Session length anomaly (FlashCatch sessions are very short)"
+
+  new_detector_suggested:
+    name: "CompressedAuthRejectDetector"
+    description: >
+      Auth Reject followed by Identity Request within <1 second gap.
+      FlashCatch signature: auth failure induced rapidly, identity
+      extracted in sub-second window. Normal auth reject/retry has
+      larger timing gaps.
+    severity: CRITICAL
+    spec_ref: "3GPP TS 24.301 §5.4.3.2"
+
+hardware_used_in_research:
+  - "USRP B210 (as LTE jammer and rogue eNodeB)"
+  - "srsRAN / OAI software stack"
+  - "Open5GS EPC"
+
+references:
+  - "FlashCatch WiSec 2025: https://dl.acm.org/doi/10.1145/3734477.3734705"
+  - "ResearchGate: https://www.researchgate.net/publication/393170131_FlashCatch_Minimizing_Disruption_in_IMSI_Catcher_Operations"

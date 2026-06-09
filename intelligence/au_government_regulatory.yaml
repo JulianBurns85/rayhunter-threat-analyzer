@@ -1,0 +1,238 @@
+---
+# Australian RF Signature Library — Government & Regulatory Vehicles
+# All data sourced from public procurement, ACMA register, vendor documentation
+# Version: 1.0 | June 2026
+
+meta:
+  category: government_regulatory
+  jurisdiction: australia_primary
+  last_updated: "2026-06-06"
+  sources:
+    - "ACMA Annual Reports 2022-2025"
+    - "Rohde & Schwarz product documentation (public)"
+    - "Australian Government whole-of-government Telstra panel arrangement"
+    - "AFP Annual Reports — ICT procurement"
+    - "ATO field compliance vehicle procurement — AusTender public records"
+    - "Commonwealth Procurement Rules — mandatory disclosure thresholds"
+
+signatures:
+
+  # ─── ACMA FIELD VEHICLES ───────────────────────────────────────────
+
+  - id: acma_field_vehicle
+    label: "ACMA field monitoring vehicle"
+    category: government_regulatory
+    subcategory: acma
+    confidence_base: 0.82
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: large_periodic_upload
+        upload_size_mb_typical: 50
+        notes: "Bulk spectrum measurement upload — R&S ARGUS software export"
+        typical_interval_note: "Irregular — uploads when task complete or returning to office"
+      - type: lte
+        carrier: telstra
+        band: B3
+        pattern: continuous_low
+        notes: "Management/comms channel alongside data upload"
+      - type: wifi
+        standard: 802.11ac
+        freq_ghz: 5.0
+        pattern: usb_tethered_hotspot
+        notes: "R&S equipment tethered via USB to laptop — occasional local WiFi AP"
+    notable_absence:
+      - tetra: "ACMA not on GRN — absence of TETRA is a key positive indicator"
+      - dual_modem: "Single Telstra LTE modem only — no secondary carrier"
+    hardware:
+      spectrum_analyser: "Rohde & Schwarz EB500 or PR200 — documented in ACMA procurement"
+      laptop: "Getac or Panasonic ruggedised — R&S ARGUS software"
+      vehicle: "Toyota HiLux or Mitsubishi Outlander — ACMA fleet register"
+    alert_level: info
+    display_color: purple
+    map_icon: government_vehicle
+    forensic_relevance: HIGH
+    forensic_note: >
+      ACMA field teams conducting spectrum monitoring will appear as:
+      single Telstra LTE (no TETRA, no secondary carrier), irregular large
+      uploads, possible R&S equipment USB WiFi bridge. Their RF measurement
+      equipment (EB500/PR200) is PASSIVE — they receive only, do not transmit
+      on monitored frequencies. Detection of this profile near a rogue cell
+      event is highly significant for investigation records.
+    sources:
+      - "ACMA AusTender CN3510891 — R&S spectrum monitoring equipment 2022"
+      - "ACMA Annual Report 2024 — field compliance team"
+      - "Rohde & Schwarz EB500 datasheet (public)"
+
+  - id: acma_portable_monitor
+    label: "ACMA portable spectrum monitor (handheld)"
+    category: government_regulatory
+    subcategory: acma
+    confidence_base: 0.60
+    signals:
+      - type: bluetooth
+        standard: bluetooth_4_2
+        freq_ghz: 2.4
+        pattern: device_pairing
+        notes: "R&S PR200 pairs via BT to Android tablet for display"
+        manufacturer_note: "R&S BT profile — non-standard service UUID"
+      - type: wifi
+        standard: 802.11n
+        freq_ghz: 2.4
+        pattern: adhoc_or_hotspot
+        notes: "PR200 WiFi bridge for ARGUS data export"
+    standalone_confidence: 0.45
+    combination_notes: "Confidence increases significantly if detected near ACMA_FIELD_VEHICLE profile"
+    sources:
+      - "Rohde & Schwarz PR200 datasheet — Bluetooth/WiFi connectivity section"
+
+  # ─── AUSTRALIAN FEDERAL POLICE ─────────────────────────────────────
+
+  - id: afp_vehicle_composite
+    label: "AFP field vehicle — composite"
+    category: government_regulatory
+    subcategory: afp
+    confidence_base: 0.75
+    composite: true
+    signals:
+      - type: tetra
+        freq_mhz_low: 380.0
+        freq_mhz_high: 400.0
+        protocol: ETSI_TETRA
+        notes: "AFP on GRN in Victoria — same network as VicPol"
+      - type: p25
+        freq_mhz_low: 800.0
+        freq_mhz_high: 870.0
+        protocol: APCO_P25_phase2
+        modulation: hdqpsk
+        notes: "AFP national encrypted P25 network — KEY differentiator from VicPol"
+        encrypted: true
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: periodic_burst
+        notes: "Whole-of-government Telstra arrangement"
+    differentiator: >
+      GRN TETRA + P25 800MHz signal = AFP not VicPol.
+      VicPol does not operate P25 in Victoria.
+    alert_level: info
+    display_color: blue
+    map_icon: federal_vehicle
+    sources:
+      - "AFP Annual Report 2024 — communications infrastructure"
+      - "ACMA P25 licence register — AFP"
+      - "APCO P25 standard documentation"
+
+  - id: afp_digital_forensics_kit
+    label: "AFP digital forensics field kit"
+    category: government_regulatory
+    subcategory: afp_forensics
+    confidence_base: 0.70
+    signals:
+      - type: bluetooth
+        standard: bluetooth_4_2
+        freq_ghz: 2.4
+        pattern: device_enumeration_burst
+        notes: >
+          Cellebrite UFED or MSAB XRY connecting to seized device —
+          produces distinctive rapid BT enumeration pattern as kit
+          probes device profiles
+        duration_s: 10
+        interval_note: "Single event — not periodic"
+      - type: wifi
+        standard: 802.11ac
+        freq_ghz: 5.0
+        pattern: ad_hoc_brief
+        notes: "UFED Cloud Analyzer WiFi — brief when uploading extraction"
+    standalone_confidence: 0.50
+    notes: >
+      This signature indicates active digital forensics work nearby.
+      Not vehicle-specific — could be stationary or mobile. Correlate
+      with AFP vehicle profile for higher confidence.
+    sources:
+      - "Cellebrite UFED 4PC datasheet — connectivity specifications"
+      - "MSAB XRY Complete datasheet"
+
+  # ─── AUSTRALIAN TAXATION OFFICE ────────────────────────────────────
+
+  - id: ato_field_vehicle
+    label: "ATO field compliance vehicle"
+    category: government_regulatory
+    subcategory: ato
+    confidence_base: 0.55
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: continuous_low_duty
+        notes: "Standard govt Telstra panel — minimal data footprint"
+      - type: wifi
+        standard: 802.11ac
+        freq_ghz: 5.0
+        pattern: hotspot_occasional
+        notes: "Mobile hotspot for field officers — Dell Latitude with Telstra USB modem"
+    notable_absence:
+      - tetra: "ATO not on GRN"
+      - p25: "No encrypted radio"
+    standalone_confidence: 0.40
+    notes: >
+      Low distinctive signature — ATO field vehicles look similar to any
+      government contractor. Correlate with physical observation.
+    sources:
+      - "ATO AusTender fleet vehicle procurement 2023"
+
+  # ─── HOME AFFAIRS / BORDER FORCE ───────────────────────────────────
+
+  - id: abf_field_unit
+    label: "Australian Border Force field unit"
+    category: government_regulatory
+    subcategory: abf
+    confidence_base: 0.72
+    signals:
+      - type: tetra
+        freq_mhz_low: 380.0
+        freq_mhz_high: 400.0
+        protocol: ETSI_TETRA
+        notes: "ABF on GRN in state capitals"
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: periodic_burst
+      - type: uhf_cb
+        freq_mhz: 476.4125
+        notes: "UHF CB channel 40 — ABF sometimes uses for short-range coordination"
+        confidence_weight: 0.3
+    sources:
+      - "ACMA licence register — Home Affairs TETRA allocations"
+
+  # ─── INTELLIGENCE / LOW-FOOTPRINT VEHICLES ─────────────────────────
+
+  - id: unknown_intel_vehicle
+    label: "Unknown — possible intelligence/surveillance vehicle"
+    category: government_regulatory
+    subcategory: unknown_intel
+    confidence_base: 0.60
+    detection_type: absence_signature
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: minimal_low_duty
+        notes: "Single LTE modem, very low duty cycle"
+    notable_absence:
+      - tetra: "No GRN TETRA despite being a vehicle with LTE"
+      - wifi: "No local WiFi AP or hotspot"
+      - bluetooth: "No BT advertisement"
+    notes: >
+      Deliberate RF minimisation is itself a signature. A vehicle
+      with only a single minimal LTE uplink and no other RF activity
+      in an area where surveillance is occurring warrants attention.
+      ASIO/DSD vehicles deliberately minimise RF footprint.
+      This is a HYPOTHESIS flag only — requires corroborating evidence.
+    alert_level: flag
+    display_color: amber
+    requires_corroboration: true
+    sources:
+      - "ASIS/ASIO operational security doctrine — public references"
+      - "Signals intelligence tradecraft — academic literature"

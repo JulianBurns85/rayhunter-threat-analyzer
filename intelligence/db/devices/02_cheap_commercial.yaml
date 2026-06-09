@@ -1,0 +1,43 @@
+# =============================================================================
+# Device Profile: PKI 1625 / Generic Cheap Commercial IMSI Catcher
+# =============================================================================
+# File: intelligence/db/devices/02_cheap_commercial.yaml
+#
+# Sources:
+#   InfoSec Institute "Cellphone Surveillance: The Secret Arsenal" (2016)
+#   Dabrowski et al. "IMSI-Catch Me If You Can" ACSAC 2014
+#   Kareem IJRITCC 2023
+# =============================================================================
+
+device_id: "cheap_commercial"
+name: "PKI 1625 / Generic Commercial IMSI Catcher"
+vendor: "PKI Electronic Intelligence GmbH / Various"
+type: "commercial_imsi_catcher"
+cost_range_usd: [1200, 50000]
+access_tier: "Commercial (various jurisdictions)"
+
+capabilities:
+  lte_support: true             # Varies by model
+  gsm_support: true
+  multi_carrier: false
+  transparent_proxy: false      # Typically not available
+  direction_finding: false
+  silent_intercept: false
+
+discriminators:
+  confirms:
+    - eea0_present
+    - single_carrier_only
+  excludes:
+    - zero_eea0
+    - cross_carrier_simultaneous
+    - metronomic_610s
+    - persistence_300_days
+
+detection_notes: >
+  Cheap commercial IMSI catchers typically force EEA0 null-cipher and
+  operate on a single carrier. Multi-carrier simultaneous operation and
+  transparent proxy mode are not available at this price tier.
+  PKI 1625 listed as hardware candidate in prior Cranbourne East
+  HardwareFingerprinter output due to cross-carrier signal — however
+  cross-carrier confirms AGAINST cheap commercial profile.

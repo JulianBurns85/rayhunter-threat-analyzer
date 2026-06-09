@@ -1,0 +1,78 @@
+# OpenAirInterface (OAI) eNodeB — Device Intelligence Profile
+# Source: OAI GitLab source code, Ettus Knowledge Base, EURECOM documentation
+# Last updated: 2026-05-22
+
+metadata:
+  title: "OpenAirInterface (OAI) eNodeB"
+  manufacturer: "EURECOM (open source)"
+  device_family:
+    - "OpenAirInterface LTE eNodeB"
+    - "OAI softmodem"
+    - "OAI + USRP B210"
+    - "OAI + USRP B200"
+  classification: "Open source SDR base station"
+  source_confidence: HIGH
+  notes: >
+    OpenAirInterface is an open-source LTE stack from EURECOM.
+    Like srsRAN, it runs on commodity SDR hardware (USRP B210 primary).
+    Default configuration produces EEA0/EIA0 cipher preference and
+    metronomic RRC inactivity timer behavior similar to srsRAN.
+
+capabilities:
+  network_generations: [4G_LTE, 5G_NR]
+  duplex: full
+  platforms: [USRP_B210, USRP_B200, USRP_N310, BladeRF, LimeSDR]
+  cost_range_usd: "500-3000 (SDR hardware only)"
+
+default_configuration:
+  rrc_inactivity_timer_ms: 10000
+  notes: >
+    OAI default RRC inactivity timer varies by version — typically
+    10000ms (10s) in earlier versions. Configurable in enb.conf.
+    Unlike srsRAN's 30000ms default, OAI timer value is less consistent
+    across deployments — making metronomic detection harder but not impossible.
+  cipher_preference:
+    eea: ["EEA0", "EEA2", "EEA1"]
+    eia: ["EIA2", "EIA1", "EIA0"]
+    notes: >
+      OAI default cipher preference list leads with EEA0 (no encryption).
+      If core network does not enforce cipher, OAI will negotiate EEA0.
+      This is identical to srsRAN default behavior.
+
+behavioral_signatures:
+  primary:
+    - name: "EEA0 null-cipher default negotiation"
+      description: >
+        OAI eNodeB default cipher preference list is EEA0, EEA2, EEA1.
+        Without explicit cipher enforcement at the EPC/MME, OAI negotiates
+        EEA0 (no encryption) by default.
+      spec_ref: "3GPP TS 33.401 §5.1.3.2"
+      severity: CRITICAL
+      source: "OAI source code: openair2/RRC/LTE/rrc_eNB.c"
+
+    - name: "RRC inactivity timer — metronomic release"
+      description: >
+        OAI uses a configurable RRC inactivity timer to release UE contexts.
+        Default values produce metronomic RRCConnectionRelease patterns
+        similar to srsRAN, though timer values differ by version.
+      severity: HIGH
+
+    - name: "USRP B210 timing jitter"
+      description: >
+        OAI on USRP B210 produces characteristic timing jitter in RRC
+        message timing. Standard deviation of release intervals typically
+        higher than srsRAN (>0.5s vs srsRAN ~0.14s).
+      severity: MEDIUM
+      confidence: MEDIUM
+
+differentiators_from_srsran:
+  - "OAI timing jitter typically higher than srsRAN — SD >0.5s vs ~0.14s"
+  - "OAI inactivity timer default differs by version — less consistent metronomic signature"
+  - "OAI more commonly deployed on USRP B210/N310; srsRAN more commonly on USRP/BladeRF/LimeSDR"
+  - "Both default to EEA0 cipher preference — indistinguishable on cipher alone"
+
+references:
+  - "OAI GitLab: https://gitlab.eurecom.fr/oai/openairinterface5g"
+  - "OAI RRC source: openair2/RRC/LTE/rrc_eNB.c"
+  - "Ettus Knowledge Base: Getting Started with OAI on USRP"
+  - "EURECOM OAI workshop documentation 2019"

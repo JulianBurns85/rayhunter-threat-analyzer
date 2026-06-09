@@ -1,0 +1,51 @@
+# Rohde & Schwarz IMSI Catcher Family — Device Intelligence Profile
+# Source: Rohde & Schwarz historical documentation, Wikipedia, EFF SLS database,
+#         Media Fields Journal historical analysis
+# Last updated: 2026-05-22
+
+metadata:
+  title: "Rohde & Schwarz IMSI Catcher Family (GA 090, GA 900)"
+  manufacturer: "Rohde & Schwarz GmbH & Co. KG (Germany) — founded 1933"
+  device_family:
+    - "GA 090 (1996 — first commercial IMSI catcher)"
+    - "GA 900 (1997 — added call interception)"
+    - "TSME series (modern network scanner/interceptor)"
+  classification: "Commercial law enforcement / intelligence — European origin"
+  source_confidence: MEDIUM
+  historical_significance: >
+    Rohde & Schwarz invented and commercialized the first IMSI catcher in 1996.
+    The GA 090 was the world's first dedicated commercial IMSI catcher, patented
+    and launched in Munich. All modern commercial IMSI catchers trace their
+    lineage to this design.
+
+capabilities:
+  network_generations: [2G_GSM, 3G_UMTS, 4G_LTE]
+  first_commercial_release: 1996
+  attack_modes:
+    - IMSI_harvest
+    - TMSI_tracking
+    - call_intercept
+    - location_tracking
+
+behavioral_signatures:
+  primary:
+    - name: "TMSI-based subscriber identification"
+      description: >
+        Early Rohde & Schwarz methodology: identify subscriber by TMSI,
+        then coordinate with network operator to map TMSI to IMSI/phone number.
+        More sophisticated than brute-force IMSI extraction — leaves fewer traces.
+      severity: MEDIUM
+      detection_note: "TMSI correlation attacks leave minimal RRC-layer signatures"
+
+    - name: "European market primary deployment"
+      description: >
+        R&S devices are primarily deployed by European law enforcement and
+        intelligence agencies. Australian AFP may use R&S equipment through
+        Five Eyes intelligence sharing arrangements.
+      severity: INFO
+
+references:
+  - "Media Fields Journal: Rise of the IMSI Catcher (2016)"
+  - "Wikipedia: IMSI-catcher — Rohde & Schwarz history"
+  - "EFF Street Level Surveillance"
+  - "Rohde & Schwarz patent: Virtual Base Transceiver Station (VBTS) — commercialized 2003"

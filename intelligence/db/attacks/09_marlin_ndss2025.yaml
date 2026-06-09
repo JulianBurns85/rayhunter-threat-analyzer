@@ -1,0 +1,86 @@
+# Marlin Methodology — NDSS 2025 Research Intelligence
+# Source: Tucker et al. (2025). "Detecting IMSI-Catchers by Characterizing
+#         Identity Exposing Messages in Cellular Traffic"
+#         NDSS Symposium 2025. DOI: 10.14722/ndss.2025.241115
+# Authors: Tyler Tucker, Nathaniel Bennett, Martin Kotuliak, Simon Erni,
+#          Srdjan Capkun, Kevin Butler, Patrick Traynor
+#          University of Florida + ETH Zurich
+# Classification: OPEN_SOURCE — Citation safe (conference paper)
+# Last updated: 2026-05-22
+
+title: "Marlin — IMSI-Catcher Detection via Identity Exposing Message Ratio"
+authors: "Tucker, Bennett, Kotuliak, Erni, Capkun, Butler, Traynor"
+institution: "University of Florida + ETH Zurich"
+venue: "NDSS Symposium 2025"
+doi: "10.14722/ndss.2025.241115"
+year: 2025
+url: "https://www.ndss-symposium.org/ndss-paper/detecting-imsi-catchers-by-characterizing-identity-exposing-messages-in-cellular-traffic/"
+citation_safe: true
+
+key_finding: >
+  Current IMSI catcher detection tools focus on CORRELATED behaviors
+  (new base stations, cipher changes, signal strength) which produce
+  high false positive rates. Marlin instead focuses on CAUSAL behaviors —
+  the messages an IMSI catcher MUST send to extract IMSI.
+
+  Result: 53 pre-authentication messages identified across 2G/3G/4G/5G-NSA
+  that can force IMSI exposure. Normal LTE networks use these messages in
+  fewer than 3% of total connections. IMSI catchers produce 30-100%.
+
+imsi_exposure_ratio_thresholds:
+  lte_normal_median: "< 3% of total connections"
+  gsm_normal_median: "< 6% of total connections"
+  imsi_catcher_range: "30-100% of connections"
+  statistical_significance: "p << 0.005 confirmed in field detection"
+
+detection_implications_for_rayhunter_threat_analyzer:
+  current_approach: >
+    RTA currently detects individual IMSI-exposing events (Identity Requests,
+    Auth Rejects, etc.) as discrete findings. This is correlated-behavior
+    detection per Marlin's taxonomy.
+  marlin_improvement: >
+    Implementing IE Ratio tracking across a capture session would add
+    causal detection capability. If IE Ratio > 10% across a session,
+    that is statistically anomalous and should be flagged.
+  recommended_detector: >
+    Add an IMSIExposureRatioDetector that tracks:
+    - Total RRC connections in session
+    - Connections containing any of the 53 IMSI-exposing messages
+    - IE Ratio = exposing / total
+    - Flag if IE Ratio > 10% (conservative threshold vs Marlin's 3%)
+
+messages_53_categories:
+  identity_request_types:
+    - "NAS Identity Request (IMSI type 1)"
+    - "NAS Identity Request (IMEI type 2)"
+    - "NAS Identity Request (IMEISV type 3)"
+    - "NAS Identity Request (TMSI type 4)"
+  attach_reject_triggers:
+    - "Attach Reject cause=implicitly detached"
+    - "Attach Reject cause=IMSI unknown in HLR"
+    - "Auth Reject → forced re-attach with IMSI"
+  service_reject_triggers:
+    - "Service Reject cause=implicitly detached"
+    - "TAU Reject triggers"
+  pre_auth_messages:
+    note: >
+      Full list of 53 messages in 3GPP TS 24.301, TS 24.008.
+      Key insight: many messages beyond Identity Request can
+      trigger IMSI exposure via protocol state machine forcing.
+
+false_positive_reduction:
+  marlin_insight: >
+    Temporary base stations (Cellular on Wheels / CoW) at large events
+    are a major source of false positives for correlated-behavior detectors.
+    IE Ratio approach is resilient: a legitimate CoW will still maintain
+    IE Ratio < 3% because it does not need to extract IMSIs.
+  application_to_cranbourne_east: >
+    The Cranbourne East investigation's metronomic timer and cross-carrier
+    simultaneous release findings are causal indicators — they represent
+    behaviors that serve no legitimate network purpose. This aligns with
+    Marlin's causal methodology.
+
+references:
+  - "Tucker et al. NDSS 2025 — https://dx.doi.org/10.14722/ndss.2025.241115"
+  - "IMSICatcherDetector GitHub implementation: https://github.com/eylonK14/IMSICatcherDetector"
+  - "Full paper PDF: https://www.cise.ufl.edu/~tucker/docs/2025-marlin.pdf"
