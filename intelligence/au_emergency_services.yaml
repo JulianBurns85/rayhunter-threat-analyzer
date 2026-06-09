@@ -1,0 +1,230 @@
+---
+# Australian RF Signature Library — Emergency Services
+# All data sourced from public procurement, ACMA register, vendor documentation
+# Version: 1.0 | June 2026
+# For passive detection only — no transmission required
+
+meta:
+  category: emergency_services
+  jurisdiction: australia_primary
+  last_updated: "2026-06-06"
+  sources:
+    - "Victorian Government GRN contract — Motorola Solutions, VGPB public tender"
+    - "ACMA Radiocommunications Licence Register (public)"
+    - "VicPol Annual Reports 2022-2025"
+    - "Ambulance Victoria ICT procurement notices"
+    - "Fire Rescue Victoria equipment registers"
+    - "TETRA MOU 380-400MHz Australian allocation — ACMA"
+
+signatures:
+
+  # ─── VICTORIA POLICE ───────────────────────────────────────────────
+
+  - id: vicpol_grntetra_voice
+    label: "VicPol GRN TETRA voice"
+    category: emergency_services
+    subcategory: victoria_police
+    confidence_base: 0.70
+    signals:
+      - type: tetra
+        freq_mhz_low: 380.0
+        freq_mhz_high: 400.0
+        protocol: ETSI_TETRA_DMO_TMO
+        modulation: pi4_dqpsk
+        channel_bw_khz: 25
+        burst_pattern: 4slot_tdma
+        notes: "Government Radio Network — Motorola Solutions managed"
+    detection_method: sdr_passive
+    hardware_required: [bladerf, rtlsdr, hackrf]
+    standalone_confidence: 0.55
+    combination_required: true
+    combination_notes: "TETRA alone could be any GRN user — combine with LTE pattern"
+    sources:
+      - "ACMA licence register: TETRA 380-400MHz Victorian Government"
+      - "Motorola Solutions GRN Victoria public documentation"
+
+  - id: vicpol_lte_mdt
+    label: "VicPol MDT LTE uplink"
+    category: emergency_services
+    subcategory: victoria_police
+    confidence_base: 0.65
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        freq_ul_mhz: 703
+        freq_dl_mhz: 758
+        pattern: periodic_burst
+        typical_interval_s: 15
+        burst_duration_ms: 200
+        notes: "Panasonic Toughbook CF-33 with Sierra Wireless EM7511 modem"
+      - type: lte
+        carrier: telstra
+        band: B3
+        freq_ul_mhz: 1710
+        freq_dl_mhz: 1805
+        pattern: variable
+        notes: "Secondary band — urban use"
+    detection_method: passive_lte_scan
+    hardware_required: [bladerf, rayhunter]
+    sources:
+      - "VicPol ICT procurement 2021 — Panasonic Toughbook panel"
+      - "Sierra Wireless EM7511 datasheet"
+
+  - id: vicpol_mobile_unit_composite
+    label: "VicPol mobile unit — composite profile"
+    category: emergency_services
+    subcategory: victoria_police
+    confidence_base: 0.88
+    composite: true
+    requires_all:
+      - vicpol_grntetra_voice
+      - vicpol_lte_mdt
+    optional_boosters:
+      - id: vicpol_anpr_burst
+        confidence_boost: 0.07
+    alert_level: info
+    display_color: blue
+    map_icon: police_car
+    notes: "Dual signal = high confidence VicPol vehicle. TETRA + B28 Telstra LTE burst."
+
+  - id: vicpol_anpr_mobile
+    label: "VicPol mobile ANPR unit"
+    category: emergency_services
+    subcategory: victoria_police_anpr
+    confidence_base: 0.82
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: event_triggered_burst
+        burst_size_kb_typical: 50
+        burst_interval_note: "triggered by plate capture — irregular, clusters near intersections"
+      - type: wifi
+        standard: 802.11ac
+        freq_ghz: 5.8
+        pattern: adhoc_sync
+        notes: "Genetec AutoVu sync to base when in range of station WiFi"
+    hardware: "Genetec AutoVu — documented in VicPol procurement 2020"
+    detection_method: passive_lte_scan
+    sources:
+      - "Genetec AutoVu product documentation"
+      - "VicPol 2020 ANPR expansion procurement notice"
+
+  - id: vicpol_drone_djimavic
+    label: "VicPol DJI Mavic Enterprise drone"
+    category: emergency_services
+    subcategory: victoria_police_aviation
+    confidence_base: 0.85
+    signals:
+      - type: ble
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        advertisement_interval_ms: 1000
+        payload_type: remote_id_astm_f3411
+        manufacturer_id: "0x2C05"
+        notes: "CASA Remote ID mandatory from Jan 2024 — legally required broadcast"
+        content_fields: [serial_number, operator_id, gps_lat, gps_lon, altitude_m, velocity_ms]
+      - type: wifi
+        standard: wifi_nan
+        freq_ghz: [2.4, 5.8]
+        advertisement_interval_ms: 1000
+        notes: "Secondary Remote ID channel per ASTM F3411-22a"
+      - type: ocusync3
+        freq_ghz: [2.4, 5.8]
+        pattern: frequency_hopping
+        hop_rate_hz: ~60
+        notes: "DJI OcuSync 3 — controller uplink/downlink"
+    hardware: "DJI Mavic 3 Enterprise — confirmed VicPol procurement 2023"
+    detection_method: ble_passive_scan + sdr_passive
+    remote_id_legal_note: "Remote ID broadcast is legally mandated — passive detection has zero legal ambiguity"
+    sources:
+      - "CASA Remote ID rules — CASR Part 101, effective Jan 2024"
+      - "VicPol Annual Report 2023 — UAS capability"
+      - "DJI Mavic 3 Enterprise specifications"
+
+  # ─── AMBULANCE VICTORIA ────────────────────────────────────────────
+
+  - id: av_composite
+    label: "Ambulance Victoria vehicle — composite"
+    category: emergency_services
+    subcategory: ambulance_victoria
+    confidence_base: 0.86
+    composite: true
+    signals:
+      - type: tetra
+        freq_mhz_low: 380.0
+        freq_mhz_high: 400.0
+        protocol: ETSI_TETRA
+        notes: "GRN shared with VicPol and FRV — carrier alone insufficient"
+      - type: lte
+        carrier: optus
+        band: B28
+        notes: "KEY DIFFERENTIATOR — Ambulance Victoria on Optus, VicPol on Telstra"
+        freq_ul_mhz: 703
+        freq_dl_mhz: 758
+      - type: bluetooth
+        standard: bluetooth_4_2
+        freq_ghz: 2.4
+        pattern: periodic_pairing
+        notes: "Philips/Zoll cardiac monitor BT sync to Toughpad — when treating patient"
+        advertisement_interval_ms: ~100
+    alert_level: info
+    display_color: green
+    map_icon: ambulance
+    differentiator: "GRN TETRA + Optus LTE (not Telstra) = Ambulance, not Police"
+    sources:
+      - "Ambulance Victoria ICT panel — Optus whole-of-government contract"
+      - "Philips HeartStart monitor Bluetooth specifications"
+
+  # ─── FIRE RESCUE VICTORIA ──────────────────────────────────────────
+
+  - id: frv_composite
+    label: "Fire Rescue Victoria vehicle"
+    category: emergency_services
+    subcategory: fire_rescue_victoria
+    confidence_base: 0.78
+    composite: true
+    signals:
+      - type: tetra
+        freq_mhz_low: 380.0
+        freq_mhz_high: 400.0
+        protocol: ETSI_TETRA
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: periodic_low_duty
+        notes: "Mix Telematics vehicle tracking — lower data rate than police MDT"
+        typical_interval_s: 60
+      - type: wifi
+        standard: 802.11n
+        freq_ghz: 5.8
+        pattern: intermittent_burst
+        notes: "FLIR thermal camera wireless bridge — only active when camera transmitting"
+    alert_level: info
+    display_color: red
+    map_icon: fire_truck
+    sources:
+      - "Mix Telematics FRV fleet contract — public tender"
+      - "FLIR K65 thermal camera specifications"
+
+  # ─── STATE EMERGENCY SERVICE ───────────────────────────────────────
+
+  - id: ses_vehicle
+    label: "SES vehicle"
+    category: emergency_services
+    subcategory: ses
+    confidence_base: 0.60
+    signals:
+      - type: tetra
+        freq_mhz_low: 380.0
+        freq_mhz_high: 400.0
+        protocol: ETSI_TETRA
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: low_duty_cycle
+        notes: "Minimal data footprint — key negative differentiator vs police"
+    notes: "Absence of MDT burst pattern differentiates SES from VicPol on GRN"
+    alert_level: info
+    display_color: orange

@@ -1,0 +1,517 @@
+# =============================================================================
+# Australian RF Signature Library — v0.1
+# CASTNET / Rayhunter Threat Analyzer
+# Purpose: Whitelist legitimate authorised RF operators to reduce false positives
+#          and protect authorised law enforcement operations from misidentification
+# Author: Julian Burns — Cranbourne East VIC 2026
+# License: MIT
+# Sources: ACMA RRL, Wikipedia Gov Radio Networks AU, RadioReference.com,
+#          3GPP TS 36.101, EFF SLS, NEMA PSMB Review, DTF Victoria
+# Last updated: 2026-06-07
+#
+# VERDICT VALUES:
+#   AUTHORISED   — known legitimate operator, whitelisted
+#   WATCHLIST    — known operator but unusual parameters warrant logging
+#   ROGUE        — confirmed or strongly suspected IMSI catcher
+#   UNKNOWN      — not in database, flag for manual review
+#
+# NOTE: This library covers NON-CELLULAR radio systems (P25, TETRA, VHF/UHF)
+#       which will NOT appear in LTE-based CASTNET captures.
+#       For CASTNET purposes, the key is the CELLULAR LTE section below.
+#       If a rogue LTE cell appears that matches known VicPol/AFP operational
+#       parameters, escalate to WATCHLIST not ROGUE pending verification.
+# =============================================================================
+
+metadata:
+  version: "0.1"
+  region: "Victoria, Australia"
+  mcc: "505"
+  maintainer: "Julian Burns"
+  github: "https://github.com/JulianBurns85/rayhunter-threat-analyzer"
+  last_updated: "2026-06-07"
+  triple_confirmation_required: true
+
+# =============================================================================
+# SECTION 1: VICTORIAN EMERGENCY SERVICES RADIO (Non-Cellular)
+# These will NOT appear in CASTNET LTE captures.
+# Included for completeness and bladeRF/SDR++ passive monitoring reference.
+# =============================================================================
+
+non_cellular_signatures:
+
+  # ---------------------------------------------------------------------------
+  # Metropolitan Mobile Radio (MMR) — Greater Melbourne + Geelong
+  # Source: DTF Victoria, Wikipedia Government Radio Networks AU
+  # ---------------------------------------------------------------------------
+  - id: VIC_MMR_001
+    name: "Metropolitan Mobile Radio (MMR)"
+    operator: "Triple Zero Victoria / Victorian Government"
+    managed_by: "Emergency Services Telecommunications Authority (ESTA)"
+    technology: "P25 APCO-25 Phase 1 (digital trunked)"
+    coverage: "Greater Melbourne and Geelong metropolitan areas"
+    users:
+      - "Victoria Police"
+      - "Ambulance Victoria"
+      - "Fire Rescue Victoria (MFB)"
+      - "Victoria State Emergency Service"
+      - "Corrections Victoria"
+      - "Life Saving Victoria"
+    encryption: "AES-256 (VicPol talkgroups) — fully encrypted, unmonitorable"
+    equipment: "Motorola XTS5000 portables, XTL5000 mobiles"
+    verdict: AUTHORISED
+    castnet_visible: false
+    notes: >
+      Fully encrypted P25 digital. No scanner can decode VicPol talkgroups.
+      Will NOT appear in CASTNET LTE captures. Reference only.
+    source: "DTF Victoria dtf.vic.gov.au/metropolitan-mobile-radio"
+
+  # ---------------------------------------------------------------------------
+  # Regional Mobile Radio (RMR) — Rural Victoria
+  # Source: Wikipedia Government Radio Networks AU, RadioReference.com
+  # ---------------------------------------------------------------------------
+  - id: VIC_RMR_001
+    name: "Regional Mobile Radio (RMR)"
+    operator: "Victorian Government / Telstra"
+    technology: "P25 APCO-25 Phase I & II (digital VHF trunked)"
+    coverage: "Regional Victoria"
+    users:
+      - "Country Fire Authority (CFA)"
+      - "Fire Rescue Victoria"
+      - "Victoria Police (encrypted since Nov 2018)"
+      - "Ambulance Victoria"
+      - "Victoria State Emergency Service"
+      - "Corrections Victoria"
+      - "Life Saving Victoria"
+    encryption: "AES encrypted (VicPol since 20 November 2018)"
+    verdict: AUTHORISED
+    castnet_visible: false
+    notes: >
+      Regional VicPol transitioned to encrypted comms 20 Nov 2018.
+      Will NOT appear in CASTNET LTE captures. Reference only.
+    source: "Wikipedia Government Radio Networks Australia"
+
+  # ---------------------------------------------------------------------------
+  # Victorian StateNet Mobile Radio (SMR) — Non-Emergency Government
+  # Source: Wikipedia Government Radio Networks AU
+  # ---------------------------------------------------------------------------
+  - id: VIC_SMR_001
+    name: "Victorian StateNet Mobile Radio (SMR)"
+    operator: "Victorian Government Dept of Treasury and Finance / Telstra"
+    technology: "MPT1327 trunked (analogue/digital)"
+    coverage: "Statewide Victoria"
+    users:
+      - "Non-emergency government agencies"
+      - "Ambulance Victoria (transitioning to RMR)"
+    encryption: "Minimal — some analogue frequency inversion scrambling only"
+    verdict: AUTHORISED
+    castnet_visible: false
+    notes: >
+      Older MPT1327 network. Ambulance Victoria transitioning away.
+      Some traffic may be monitorable with appropriate software (Trunkview).
+      NOT cellular LTE — will not appear in CASTNET.
+    source: "Wikipedia Government Radio Networks Australia"
+
+  # ---------------------------------------------------------------------------
+  # Victoria Police — Country VHF Network (Legacy, largely decommissioned)
+  # Source: RadioNerds, RadioReference.com, OoCities scanner archives
+  # ---------------------------------------------------------------------------
+  - id: VIC_POL_VHF_COUNTRY
+    name: "Victoria Police Country VHF Network (Legacy)"
+    operator: "Victoria Police"
+    technology: "VHF FM analogue (legacy, being decommissioned)"
+    frequency_bands:
+      - band: "VHF High Band"
+        range_mhz: "163.5 - 164.1"
+        notes: "Country Victoria regional districts"
+        specific_channels:
+        central_east_gippsland: ["163.8250", "163.8375", "163.8750", "163.8875", "163.9125", "163.9500"]
+        south_gippsland: ["163.8625", "163.9250", "163.9375", "163.9875", "164.0125", "164.0500"]
+        central_eastern_vic: ["163.8500", "163.9625", "163.9750", "164.0000", "164.0250", "164.0375"]
+        north_eastern_vic: ["163.5750", "163.6125", "163.6375"]
+    ctcss_tones:
+      central_east_gippsland: 241.8
+      south_gippsland: 225.7
+      central_eastern_vic: 218.1
+      north_eastern_vic: 210.7
+    verdict: AUTHORISED
+    castnet_visible: false
+    notes: >
+      Legacy analogue VHF. Metro VicPol moved to encrypted MMR — no longer
+      monitorable. Country areas still transitioning. NOT cellular LTE.
+    source: "radionerds.weebly.com, oocities.org/scanningvictoria"
+
+  # ---------------------------------------------------------------------------
+  # Country Fire Authority (CFA) — VHF Dispatch
+  # Source: Melbourne scanner frequency archives, RadioReference
+  # ---------------------------------------------------------------------------
+  - id: VIC_CFA_VHF_001
+    name: "Country Fire Authority VHF Dispatch"
+    operator: "Country Fire Authority (CFA)"
+    technology: "VHF FM analogue / P25 RMR (transitioning)"
+    frequency_bands:
+      - band: "VHF"
+        range_mhz: "160.9 - 163.6"
+        specific_channels:
+        north_central_bendigo: ["161.1000", "161.1875", "161.0875"]
+        south_west_casterton: ["161.1125", "160.9875", "161.0875"]
+        south_west_hamilton: ["161.0500", "161.0125", "161.0375"]
+        corangamite_colac: ["161.1875", "161.0875", "161.0000"]
+        barwon_geelong: ["162.4000", "162.5750", "162.8375", "163.2250", "163.5375", "163.6000", "160.9875", "161.1250", "161.0125"]
+        westernport_dandenong: ["162.4125", "162.6750", "162.7250", "163.5500", "163.7875", "161.1975", "161.0750", "161.1375"]
+        gippsland_warragul: ["161.1625", "161.0625"]
+        gippsland_sale: ["161.0000", "160.9875", "161.0375"]
+        gippsland_bairnsdale: ["161.0750", "161.0250", "161.0500"]
+        murray_goulburn_seymour: ["161.0125", "161.2250", "161.1375"]
+    verdict: AUTHORISED
+    castnet_visible: false
+    source: "cqdx11.com Melbourne frequency archive"
+
+  # ---------------------------------------------------------------------------
+  # Victoria Police HF Network
+  # Source: SWLD.com.au Australian Police HF Radio Frequencies
+  # ---------------------------------------------------------------------------
+  - id: VIC_POL_HF_001
+    name: "Victoria Police HF Network"
+    operator: "Victoria Police"
+    technology: "HF radio"
+    broadcast_sites:
+      - "Beaconsfield"
+      - "Collingwood"
+      - "Hamilton"
+      - "Melbourne"
+      - "Mildura"
+      - "Moe"
+      - "Upper Beaconsfield"
+      - "Wangaratta"
+    verdict: AUTHORISED
+    castnet_visible: false
+    source: "swld.com.au/pages/aus_police.htm"
+
+# =============================================================================
+# SECTION 2: LEGITIMATE CELLULAR LTE INFRASTRUCTURE (CASTNET VISIBLE)
+# These ARE visible to CASTNET. Cross-reference before flagging as ROGUE.
+# =============================================================================
+
+cellular_lte_signatures:
+
+  # ---------------------------------------------------------------------------
+  # Telstra — Australian LTE/5G Carrier
+  # MCC=505 MNC=01
+  # Source: Whirlpool AU Frequency Wiki, ACMA spectrum allocations
+  # ---------------------------------------------------------------------------
+  - id: TELSTRA_LTE_001
+    name: "Telstra 4G/5G Commercial Network"
+    operator: "Telstra"
+    mcc: "505"
+    mnc: "01"
+    technology: "LTE / 5G NR"
+    frequency_bands:
+      - band: 28
+        name: "700MHz APT"
+        uplink_mhz: "713-733"
+        downlink_mhz: "768-788"
+        bandwidth_mhz: 20
+        notes: "Primary rural coverage band"
+      - band: 3
+        name: "1800MHz"
+        uplink_mhz: "1710-1785"
+        downlink_mhz: "1805-1880"
+        notes: "Primary urban capacity band"
+      - band: 1
+        name: "2100MHz"
+        uplink_mhz: "1920-1980"
+        downlink_mhz: "2110-2170"
+        notes: "Urban capacity"
+      - band: 26
+        name: "850MHz+"
+        uplink_mhz: "814-824"
+        downlink_mhz: "859-869"
+        notes: "Rural extension"
+      - band: 5
+        name: "850MHz"
+        uplink_mhz: "835-845"
+        downlink_mhz: "880-890"
+      - band: 7
+        name: "2600MHz"
+        uplink_mhz: "2500-2570"
+        downlink_mhz: "2620-2690"
+        notes: "Urban high capacity"
+      - band: 40
+        name: "2300MHz TDD"
+        notes: "Private/remote mine site networks primarily"
+      - nr_band: 28
+        name: "5G 700MHz"
+      - nr_band: 78
+        name: "5G 3500MHz"
+      - nr_band: 5
+        name: "5G 850MHz"
+      - nr_band: 7
+        name: "5G 2600MHz"
+      - nr_band: 26
+        name: "5G 850MHz+"
+    expected_parameters:
+      null_cipher: false
+      empty_neighbour_list: false
+      off_band_earfcn: false
+      timing_advance: "normal distribution"
+      consistent_lac: true
+    opencellid_cross_reference: required
+    verdict: AUTHORISED
+    notes: >
+      Any Telstra-MCC/MNC cell with TAC/CID in OpenCelliD database = AUTHORISED.
+      Any Telstra-MCC/MNC cell NOT in OpenCelliD = WATCHLIST/ROGUE candidate.
+      Our rogue CIDs use Telstra MCC/MNC but have zero OpenCelliD hits.
+    source: "whirlpool.net.au/wiki/mobile_phone_frequencies, ACMA"
+
+  # ---------------------------------------------------------------------------
+  # Optus — Australian LTE/5G Carrier
+  # MCC=505 MNC=02
+  # ---------------------------------------------------------------------------
+  - id: OPTUS_LTE_001
+    name: "Optus 4G/5G Commercial Network"
+    operator: "Optus"
+    mcc: "505"
+    mnc: "02"
+    technology: "LTE / 5G NR"
+    frequency_bands:
+      - band: 28
+        uplink_mhz: "703-713"
+        downlink_mhz: "758-768"
+        bandwidth_mhz: 10
+      - band: 3
+        name: "1800MHz"
+      - band: 1
+        name: "2100MHz"
+      - band: 8
+        name: "900MHz"
+        uplink_mhz: "890-915"
+        downlink_mhz: "935-960"
+        notes: "Optus primary rural band"
+      - band: 40
+        name: "2300MHz TDD"
+        notes: "Sydney, Melbourne, Brisbane, Adelaide, Canberra metro"
+    verdict: AUTHORISED
+    opencellid_cross_reference: required
+    source: "whirlpool.net.au/wiki/mobile_phone_frequencies"
+
+  # ---------------------------------------------------------------------------
+  # Vodafone — Australian LTE/5G Carrier
+  # MCC=505 MNC=03
+  # ---------------------------------------------------------------------------
+  - id: VODAFONE_LTE_001
+    name: "Vodafone 4G/5G Commercial Network"
+    operator: "Vodafone Australia (now TPG)"
+    mcc: "505"
+    mnc: "03"
+    technology: "LTE / 5G NR"
+    frequency_bands:
+      - band: 28
+        uplink_mhz: "733-748"
+        downlink_mhz: "788-803"
+        bandwidth_mhz: 15
+      - band: 3
+        name: "1800MHz"
+      - band: 1
+        name: "2100MHz"
+      - band: 5
+        name: "850MHz"
+        uplink_mhz: "825-835"
+        downlink_mhz: "870-880"
+        bandwidth_mhz: 10
+    verdict: AUTHORISED
+    opencellid_cross_reference: required
+    notes: >
+      Our rogue Vodafone-MNC CIDs (TAC=30336) have zero OpenCelliD hits.
+      Any Vodafone CID not in OpenCelliD in Cranbourne East = ROGUE candidate.
+    source: "whirlpool.net.au/wiki/mobile_phone_frequencies"
+
+  # ---------------------------------------------------------------------------
+  # Australia Public Safety Mobile Broadband (PSMB) — Future / In Development
+  # Source: NEMA PSMB Review 2024, NSW Telco Authority
+  # ---------------------------------------------------------------------------
+  - id: AU_PSMB_FUTURE
+    name: "Australian Public Safety Mobile Broadband (PSMB)"
+    operator: "TBD — national program not yet deployed"
+    status: "IN DEVELOPMENT — not operational as of June 2026"
+    technology: "LTE / 5G NR (planned)"
+    notes: >
+      Australia does NOT yet have a dedicated PSMB network as of June 2026.
+      Emergency services use commercial Telstra/Optus networks with priority QoS.
+      When PSMB deploys, update this entry with TAC/frequency allocations.
+      Current Australian emergency LTE traffic rides on commercial carrier
+      infrastructure and will appear with normal commercial TACs in OpenCelliD.
+    verdict: WATCHLIST
+    source: "nema.gov.au/our-work/key-programs/public-safety-mobile-broadband"
+
+# =============================================================================
+# SECTION 3: KNOWN ROGUE SIGNATURES
+# Confirmed IMSI catcher indicators from active investigation
+# =============================================================================
+
+rogue_signatures:
+
+  - id: HARRIS_HAILSTORM_VIC_001
+    name: "Harris HailStorm / StingRay II — Active Cranbourne East"
+    hardware_fingerprint: "80% Harris HailStorm / StingRay II (YAICD v4.1)"
+    confidence: "99.99% Active Rogue Platform (Platform Fusion Alpha)"
+    yaicd_score: 5.00
+    threshold: 2.6
+    heuristics_confirmed: "9/10"
+    verdict: ROGUE
+    known_cids:
+      telstra_tac_12385:
+        - ci: 137713195
+          note: "Highest observation count"
+          opencellid: false
+        - ci: 137713175
+          note: "Geo-located Prendergast Ave 331m"
+          opencellid: false
+        - ci: 137713165
+          note: "Confirmed"
+          opencellid: false
+        - ci: 137713155
+          note: "Confirmed"
+          opencellid: false
+        - ci: 135836191
+          note: "Geo-located Collison Rd 912m"
+          opencellid: false
+        - ci: 135836171
+          note: "Geo-located Casey Fields 2424m"
+          opencellid: false
+        - ci: 135836161
+          note: "Added May 2026 — 31 observations"
+          opencellid: false
+      vodafone_tac_30336:
+        - ci: 8409357
+          note: "Highest Vodafone obs"
+          opencellid: false
+        - ci: 8409367
+          note: "Confirmed"
+          opencellid: false
+        - ci: 8409387
+          note: "Confirmed"
+          opencellid: false
+        - ci: 8409397
+          note: "Anomalous sub-2s departures"
+          opencellid: false
+        - ci: 8435470
+          note: "Added May 2026"
+          opencellid: false
+        - ci: 8435480
+          note: "Confirmed"
+          opencellid: false
+      post_acma_inspection_may_2026:
+        - ci: 8666381
+          note: "Appeared 8 May 2026 — zero OpenCelliD hits"
+          opencellid: false
+        - ci: 8666391
+          note: "Appeared 8 May 2026 — zero OpenCelliD hits"
+          opencellid: false
+        - ci: 8666411
+          note: "Appeared 8 May 2026 — zero OpenCelliD hits"
+          opencellid: false
+    confirmed_indicators:
+      - "4.1.1 Off-Band EARFCN"
+      - "4.1.2 Unusual CID"
+      - "4.1.3 Unusual BS Params"
+      - "4.1.4 No 2G Downgrade"
+      - "4.1.6 EEA0 Null-Cipher"
+      - "4.1.7 Empty Neighbour List"
+      - "4.1.8 Traffic Forward"
+      - "4.1.10 Inconsistent LAC"
+      - "P7 IMEISVx10"
+      - "ProSe Tracking x22"
+      - "Handover Inject x56"
+      - "Attach/Detach x30"
+    bands_observed: [3, 28]
+    escalation_timeline:
+      first_confirmed: "2026-01-23"
+      post_acma_escalation: "2026-05-08"
+      escalation_factor: "183%"
+    regulatory_references:
+      acma: "ENQ-1851DVJH04"
+      tio: "2026-03-04898"
+      vicpol: "CIRS-20260331-141"
+      afp: "LEX 4864"
+    source: "rayhunter-threat-analyzer forensic corpus — D:/RAYHUNTER_MASTER 93GB"
+
+# =============================================================================
+# SECTION 4: KNOWN EQUIPMENT MANUFACTURERS — Reference
+# =============================================================================
+
+imsi_catcher_manufacturers:
+  - name: "L3Harris Technologies (formerly Harris Corporation)"
+    products: ["StingRay", "HailStorm", "ArrowHead", "AmberJack", "KingFish"]
+    status: "Stopped selling to local LE — federal government only (US)"
+    fcc_search: "fcc.gov/oet/ea/fccid"
+    notes: "Our investigation shows 80% hardware match to HailStorm/StingRay II"
+
+  - name: "Digital Receiver Technology (Boeing division)"
+    products: ["DRTbox", "DirtBox"]
+    notes: "Common in airborne deployments"
+
+  - name: "Rohde & Schwarz"
+    products: ["GA 090", "various"]
+
+  - name: "Septier Communication"
+    notes: "Israeli manufacturer"
+
+  - name: "PKI Electronic Intelligence"
+    notes: "German manufacturer"
+
+  - name: "Rayzone"
+    notes: "Israeli manufacturer"
+
+# =============================================================================
+# SECTION 5: DATA SOURCES TO COMPLETE THIS DATABASE
+# Tasks for future investigation
+# =============================================================================
+
+todo_data_sources:
+
+  priority_1_public:
+    - source: "ACMA Register of Radiocommunications Licences (RRL)"
+      url: "https://web.acma.gov.au/rrl/"
+      action: "Search by location (Cranbourne East) and service type — pull all licensed operators within 20km"
+      data_available: "Licensee name, frequency, power, location, device type"
+
+    - source: "RFNSA — Radio Frequency National Site Archive"
+      url: "https://www.rfnsa.com.au"
+      action: "Pull all tower data for Cranbourne East postcode 3977 — get legitimate TAC/CID candidates"
+      data_available: "Tower location, carrier, bands, cell IDs"
+
+    - source: "RadioReference.com — Victoria"
+      url: "https://www.radioreference.com/db/browse/stid/152"
+      action: "Pull complete MMR/RMR trunking system data including site frequencies"
+
+  priority_2_requires_research:
+    - source: "FCC Equipment Authorization Database"
+      url: "https://www.fcc.gov/oet/ea/fccid"
+      search_terms: ["Harris StingRay", "HailStorm", "L3Harris"]
+      action: "Pull technical specs from FCC certification filings"
+      notes: "Some StingRay specs available from US certification filings"
+
+    - source: "3GPP TS 36.101"
+      url: "https://www.3gpp.org/ftp/Specs/archive/36_series/36.101/"
+      action: "Extract legitimate eNB parameter ranges for comparison baseline"
+
+    - source: "3GPP TS 23.303 ProSe"
+      action: "Define legitimate ProSe parameters vs weaponised ProSe tracking"
+
+    - source: "EFF Atlas of Surveillance"
+      url: "https://atlasofsurveillance.org"
+      contact: "Hayley Pedersen (existing contact)"
+      action: "Request known IMSI catcher deployment data for Australian agencies"
+
+  priority_3_foi:
+    - source: "ACMA Device Registration"
+      action: "FOI request — imported cellular test equipment registered in Australia"
+      notes: "IMSI catchers must be imported under specific licence conditions"
+
+    - source: "AFP Equipment Register"
+      action: "FOI — cellular interception equipment authorisations"
+
+    - source: "VicPol Telecommunications Interception Register"
+      action: "FOI — warrants and equipment used in Victoria"
+      notes: "Likely to be refused but creates paper trail"
+

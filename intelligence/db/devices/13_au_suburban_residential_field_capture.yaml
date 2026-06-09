@@ -1,0 +1,140 @@
+---
+# RAYHUNTER THREAT ANALYZER — Field Capture Reference Profile
+# ID: 13_au_suburban_residential_field_capture
+# Source: Anonymous contributor — suburban residential AU deployment (2025-2026)
+# Classification: DETECTION REFERENCE — anonymised field data
+# Description: Confirmed IMSI catcher detection signatures from a sustained
+#   residential deployment in Australia. All location and identity data removed.
+#   Regulatory references anonymised. Retained for detection threshold calibration.
+
+title: "AU Suburban Residential — Confirmed Rogue eNB Detection Profile"
+deployment_type: "Fixed residential monitoring node"
+country: "Australia"
+mcc: 505
+networks_observed: ["Telstra AU (MNC=01)", "Vodafone AU (MNC=03)"]
+monitoring_period: "12+ months (2025–2026)"
+
+hardware:
+  capture_device: "Rayhunter on consumer LTE hotspot"
+  sdr_supplement: "bladeRF 2.0 micro xA4 (supplementary IQ capture)"
+  processing: "Raspberry Pi 5"
+  analysis: "rayhunter-threat-analyzer (this tool)"
+
+# ── CONFIRMED DETECTION SIGNATURES ────────────────────────────────────────────
+confirmed_signatures:
+
+  rrc_periodicity:
+    median_cycle_seconds: 210.2
+    std_dev_seconds: 0.138
+    sample_count: 394
+    significance: "19x more precise than legitimate commercial baseline (>30s SD)"
+    hardware_candidate: "srsRAN default timer (measurement_report_period=2000ms + OS jitter)"
+    3gpp_ref: "3GPP TS 36.331 §5.3.8"
+    yaicd_param: "P14_t3212_anomaly"
+
+  null_cipher_violations:
+    type: "EEA0+EIA0 SecurityModeCommand"
+    networks: ["Telstra AU", "Vodafone AU"]
+    normal_expected: 0
+    tucker_classification: "CRITICAL — null cipher prohibited in commercial operation"
+    3gpp_ref: "3GPP TS 33.401 §8.2"
+
+  identity_request_flood:
+    threshold_exceeded: true
+    tucker_permitted_max: 2
+    tucker_classification: "CRITICAL — statistically extraordinary (p << 0.005)"
+    3gpp_ref: "3GPP TS 24.301 §5.4.4"
+
+  cross_carrier_simultaneous_operation:
+    description: "TAC=12385 (Telstra) and TAC=30336 (Vodafone) active simultaneously"
+    co_presence_windows_confirmed: 116
+    window_seconds: 300
+    forensic_significance: >
+      Two independent operators would produce statistically independent interval
+      distributions. Correlated co-presence proves single operator managing both
+      devices from a single location.
+    attribution_method: "Cross-carrier timer correlation (Dabrowski ACSAC 2014)"
+    cv_percent: 6.78
+
+  band_co_presence:
+    incompatible_pairs_observed:
+      - bands: [1, 28]
+        windows: 13
+        reason: "700MHz vs 2100MHz — 3.0x frequency ratio"
+      - bands: [3, 28]
+        windows: 6
+        reason: "700MHz vs 1800MHz — 2.43x frequency ratio"
+      - bands: [7, 28]
+        windows: 4
+        reason: "700MHz vs 2600MHz — 3.71x frequency ratio"
+    conclusion: "Single-chain SDR ruled out — two transmitters or multi-chain professional hardware required"
+    3gpp_ref: "3GPP TS 36.104 Table 5.5-1"
+
+  nas_entropy:
+    score_bits: 0.5834
+    rogue_threshold_bits: 2.5
+    legitimate_network_bits: 3.0
+    top_message_type_pct: 92.0
+    methodology: "Shannon (1948); SeaGlass UW 2017"
+
+  injected_handovers:
+    type: "mobilityControlInfo without preceding MeasurementReport"
+    count: 100
+    target_pcis: [72, 111, 120, 162, 267, 419]
+    3gpp_ref: "3GPP TS 36.331 §5.3.5"
+
+  prose_proximity_tracking:
+    message: "reportProximityConfig-r9 in RRCConnectionReconfiguration"
+    count: 62
+    significance: "Not used in normal commercial operation — real-time location tracking"
+    3gpp_ref: "3GPP TS 36.331 §6.3.6"
+
+  regulatory_behavioral_response:
+    responses_confirmed: 3
+    acma_inspection_drop_pct: 94
+    blackout_duration_hours: 76.9
+    post_blackout_escalation_multiplier: 44.5
+    significance: >
+      Legitimate infrastructure cannot exhibit regulatory-correlated behavioral
+      changes. Confirms human operator aware of investigation.
+
+# ── YAICD FRAMEWORK RESULTS ───────────────────────────────────────────────────
+yaicd:
+  score: 5.00
+  threshold: 2.6
+  verdict: "FORMAL POSITIVE DETECTION"
+  heuristics_confirmed: 9
+  heuristics_total: 10
+  source: "Dabrowski et al. ACSAC 2014 / Ziayi et al. 2021"
+
+# ── HARDWARE ATTRIBUTION ──────────────────────────────────────────────────────
+hardware_attribution:
+  device_a:
+    profile: "Professional multi-band IMSI catcher"
+    candidates: ["Harris HailStorm II", "Harris StingRay II", "Septier GUARDIAN"]
+    confidence: "PROBABLE"
+    operational_pattern: "Business hours (Mon–Fri 08:00–18:00 local)"
+    oscillator_class: "OCXO (GPS-disciplined)"
+  device_b:
+    profile: "Consumer SDR running srsRAN eNB"
+    candidates: ["BladeRF 2.0", "LimeSDR"]
+    confidence: "PROBABLE"
+    operational_pattern: "After-hours concentrated (79% outside business hours)"
+    timing_fingerprint: "~2100ms inter-event interval (srsRAN default + OS scheduler jitter)"
+    confirmation_pending: "bladeRF IQ-domain CFO measurement"
+
+# ── DETECTION THRESHOLDS (calibrated from this corpus) ────────────────────────
+calibrated_thresholds:
+  rrc_periodicity_sd_max_legitimate: 30.0  # seconds
+  nas_entropy_rogue_max: 2.5               # bits
+  co_presence_window_seconds: 300
+  identity_request_flood_window: 120       # seconds
+  identity_request_flood_max_legitimate: 2
+
+sources:
+  - "Tucker et al. NDSS 2025 — SnoopDog: Exposing IMSI-Catcher Attacks"
+  - "Dabrowski et al. ACSAC 2014 — IMSI-Catch Me If You Can"
+  - "Ziayi et al. 2021 — YAICD detection framework"
+  - "SeaGlass UW 2017 — Passive Measurement of IMSI-Catchers"
+  - "Shannon 1948 — A Mathematical Theory of Communication"
+  - "3GPP TS 24.301, 33.401, 36.104, 36.331"

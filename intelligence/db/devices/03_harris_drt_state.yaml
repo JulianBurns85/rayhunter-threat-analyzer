@@ -1,0 +1,573 @@
+---
+# RAYHUNTER THREAT ANALYZER — Device Intelligence Entry
+# ID: 03_harris_drt_state
+# Manufacturer: Harris Corporation (now L3Harris Technologies)
+# Sources: Gemini 3.3 QSG (ITAR), iDEN 2.4 Operator Manual (ITAR),
+#           iDEN 2.4 Release Notes, ACLU NorCal 2014 Guide,
+#           SeaGlass PoPETs 2017
+# Last Updated: Session 6 — MAJOR UPDATE (Band 28 confirmed, full hardware tree)
+
+manufacturer: "Harris Corporation / L3Harris Technologies"
+product_family: "RayFish"
+controller_system: "Gemini"
+classification: ITAR_RESTRICTED
+citation_note: >
+  Hardware diagrams and operational details from ITAR sources.
+  For submissions, reference ACLU 2014 guide (open source) for hardware
+  names and ACLU/EFF published documents where possible.
+  The ACLU guide (Lye 2014) publicly names: StingRay, TriggerFish, KingFish,
+  HailStorm, AmberJack — these are citation-safe via that document.
+
+controller:
+  model: "Gemini"
+  also_known_as: "RayFish Controller"
+  version_documented: "3.3"
+  source: "Gemini 3.3 Quick Start Guide (ITAR)"
+  capabilities:
+    - "Simultaneous GSM, CDMA, UMTS, LTE control"
+    - "Multi-radio system orchestration"
+    - "Registration Preferences: Single Shot, Periodic, Catch and Release modes"
+    - "LTE Method: Catch and Release / Hard Landing (Section 4-2)"
+  timing:
+    single_shot_uptime_seconds: 120
+    periodic_downtime_default_seconds: 90
+    note: "120s Single Shot is NOT the 210s observed in captures"
+  required_for: ["KingFish multi-protocol", "StingRay II", "HailStorm"]
+
+devices:
+
+  - model: "HailStorm"
+    generation: LTE
+    protocols: [LTE, UMTS, GSM, CDMA]
+    priority: CRITICAL
+
+    frequency_bands:
+      tx:
+        - band: 28
+          mhz: 700
+          confirmed: true
+          source: "Gemini 3.3 QSG hardware diagram Section 1-7.4, p.19-20"
+          note: "CRITICAL — Band 28 is Telstra's PRIMARY Australian LTE band"
+        - band: 17
+          mhz: 800
+          confirmed: true
+          source: "Gemini 3.3 QSG hardware diagram"
+      note: "700/800 MHz Tx antenna ports explicitly shown in hardware diagram"
+
+    band_28_confirmed: true
+    australian_primary_band: true  # Band 28 = Telstra's main LTE band in Australia
+
+    df_companions:
+      - model: AmberJack
+        connection: "Section 1-7.4 diagram confirmed"
+        note: "Primary DF companion for HailStorm"
+      - model: Arrowhead
+        connection: "EIM connector, Arrowhead Connection Setup diagram"
+        note: "Alternate EIM DF companion configuration"
+
+    harpoon_support:
+      bands: [700, 800]
+      version_added: "iDEN 2.4"
+      confirmed: true
+
+    hardware_fingerprint:
+      lte_capable: true
+      band_28_capable: true
+      confidence_harris: 0.90
+      confidence_commercial: 0.85
+
+    australian_relevance:
+      telstra_band_28: true
+      note: >
+        HailStorm with Band 28 Tx capability can operate on Telstra's primary
+        Australian LTE frequency. Combined with Gemini controller, supports
+        Catch and Release / Hard Landing on Australian Telstra network.
+
+  - model: "AmberJack"
+    device_type: DF_COMPANION
+    standalone: false
+    companion_to: "HailStorm"
+    confirmed_connection: "Gemini 3.3 QSG Section 1-7.4 hardware diagram"
+    accuracy_m: "1-2"
+    source_aclu: true  # Named in ACLU 2014 guide — citation safe
+    pki_equivalent: "PKI 1660"
+
+  - model: "Arrowhead"
+    device_type: DF_COMPANION
+    standalone: false
+    companion_to: "HailStorm"
+    connection_type: "EIM connector"
+    confirmed_connection: "Gemini 3.3 QSG Arrowhead Connection Setup diagram"
+    accuracy_m: "1-2"
+    source_aclu: false  # Not in ACLU guide; ITAR source only
+    note: "Alternate to AmberJack in EIM configuration"
+
+  - model: "KingFish"
+    generation: MULTI_PROTOCOL
+    protocols: [GSM, CDMA, UMTS, LTE]
+    priority: HIGH
+    source_aclu: true  # Named in ACLU 2014 guide
+
+    operational_constraint:
+      one_protocol_at_a_time: true
+      can_switch_without_restart: true
+      multi_protocol_requires: "Gemini controller"
+      note: >
+        Unlike HailStorm, KingFish can only operate one protocol at a time.
+        Requires Gemini controller for multi-protocol coordination.
+
+    hardware_fingerprint:
+      lte_capable: true
+      single_protocol_constraint: true
+      confidence_harris: 0.80
+
+  - model: "StingRay II"
+    generation: 2G_3G
+    protocols: [GSM, CDMA, UMTS]
+    priority: MEDIUM
+    source_aclu: true  # Named in ACLU 2014 guide, patent office photo published
+
+    frequency_bands:
+      rx: [850, 1900, 2100_UL]
+      special: ["iDEN", "2100_DL"]
+
+    lte_capable: false
+    note: "No LTE Tx. Legacy device. Requires Harpoons for specific band support."
+
+    hardware_fingerprint:
+      lte_capable: false
+      confidence_harris: 0.70
+
+  - model: "StingRay I"
+    generation: 2G
+    protocols: [GSM, CDMA]
+    priority: LOW
+    source_aclu: true
+
+    hardware_requirements:
+      pa_required: true
+      converter_box_required: true
+      converter_for_band: "2100 MHz"
+
+    lte_capable: false
+    note: "Legacy device. PA and converter box required for 2100 MHz operation."
+
+    hardware_fingerprint:
+      lte_capable: false
+      confidence_harris: 0.50
+
+  - model: "TriggerFish"
+    generation: 2G
+    protocols: [GSM]
+    priority: LOW
+    source_aclu: true
+    note: "Early-generation, primarily passive signal analysis."
+
+    hardware_fingerprint:
+      lte_capable: false
+      confidence_harris: 0.40
+
+capture_strategy:
+  # Per SeaGlass PoPETs 2017 — Harris RayFish leaked manual analysis
+  method: >
+    RayFish devices exploit the phone's cell reselection decision procedure by
+    mimicking the WEAKEST NEIGHBOR being advertised by the STRONGEST nearby
+    real base station. The CSS then transmits modified System Information Messages
+    including a modified Location Area Identifier (LAI), causing the phone to
+    execute a Location Update, thereby revealing IMSI, TMSI, and IMEI.
+  source: "SeaGlass, Ney et al. PoPETs 2017 (cites leaked RayFish product manuals)"
+  implication_for_captures: >
+    The CSS at Julian's location would be targeting the weakest neighbor cell
+    of the strongest Telstra/Vodafone tower in the Cranbourne East area.
+    Rayhunter captures showing modified LAI or unexpected Location Updates
+    are consistent with this RayFish capture strategy.
+
+obfuscation_terms:
+  # Per ACLU NorCal 2014 — DOJ terminology used to conceal IMSI catcher use
+  # CRITICAL for Julian's regulatory submissions
+  official_harris_names: ["StingRay", "TriggerFish", "KingFish", "HailStorm", "AmberJack"]
+  doj_concealment_terms:
+    - "digital analyzer"
+    - "cell site simulator"
+    - "cell site emulator"
+    - "cell site monitor"
+    - "mobile tracking device"
+    - "pen register"
+    - "confidential source"
+    - "WITT"  # FBI Wireless Intercept Tracking Team
+  court_documented: true
+  source: "ACLU NorCal, Lye 2014, pp.9-10"
+  sarasota_pd_admission: >
+    Sarasota PD confirmed in email (obtained by ACLU of Florida via public records
+    request) that at the request of US Marshals, officers refer to IMSI catcher
+    output as 'information from a confidential source regarding the location of
+    the suspect.' Demonstrates deliberate obfuscation policy is documented.
+  australian_relevance: >
+    This documented concealment pattern is relevant context for ACMA submissions.
+    If Australian agencies are operating similar devices, the same obfuscation
+    terminology may appear in their documentation.
+
+forced_power_transmission:
+  confirmed: true
+  mechanism: >
+    When the CSS captures a handset, the device forces the handset to transmit
+    at FULL POWER. This causes accelerated battery drain — a detectable
+    physical artifact of IMSI catcher operation.
+  source: "ACLU NorCal 2014, citing Florida v. Thomas suppression hearing transcript"
+  officer_testimony: >
+    'once the equipment comes into play and we capture that handset, to make
+    locating it easier, the equipment forces that handset to transmit at full power'
+  detection_implication: >
+    Unusual battery drain during the observed 210s cycle events could serve as
+    a corroborating artifact indicator.
+
+iden_controller:
+  version: "iDEN 2.4"
+  purpose: "iDEN protocol support (separate from Gemini)"
+  hailstorm_support_added: "iDEN 2.4"
+  harpoon_700_800_added: "iDEN 2.4"
+  gemini_required_version: "2.3+"
+  note: "iDEN, Gemini, and RDU are all components of the integrated Harris RayFish platform"
+
+hardware_fingerprint_scoring:
+  # Scoring weights for device identification
+  band_28_detected:
+    harris_hailstorm_boost: 0.30
+    pki_1625_boost: 0.25
+    note: "Band 28 narrows to LTE-capable commercial or Harris devices"
+
+  lte_attach_reject_present:
+    harris_catch_release_boost: 0.40
+    pki_catch_release_boost: 0.35
+    srsran_penalty: -0.20
+    note: "Attach Reject is commercial device signature; srsRAN typically omits this"
+
+  cross_carrier_simultaneous_release:
+    pki_operator_cycling_boost: 0.45
+    single_device_hypothesis_boost: 0.50
+    note: "PKI 1625 operator-cycling explicitly explains this — no second device needed"
+
+  timer_210s:
+    srsran_boost: 0.35
+    custom_config_note: "If Attach Rejects also present, lean commercial over srsRAN"
+
+  identity_request_only_no_attach_reject:
+    srsran_boost: 0.50
+    harris_penalty: -0.10
+
+sources:
+  - id: harris_gemini_33_qsg
+    title: "Harris Gemini 3.3 Quick Start Guide"
+    classification: ITAR
+    sections: ["Section 4-2 (Catch and Release)", "Section 1-7.4 (Hardware diagrams)", "Section 6 (LTE Redirect DF)"]
+
+  - id: iden_24_operator_manual
+    title: "iDEN 2.4 Operator Manual"
+    classification: ITAR
+    sections: ["Hardware diagrams", "Harpoon band support"]
+
+  - id: iden_24_release_notes
+    title: "iDEN 2.4 Release Notes"
+    classification: ITAR
+    note: "HailStorm chassis support, 700/800 Harpoon, Gemini v2.3+ requirement"
+
+  - id: aclu_stingrays_2014
+    title: "Stingrays: The Most Common Surveillance Tool the Government Won't Tell You About"
+    authors: ["Lye, Linda"]
+    publisher: "ACLU of Northern California"
+    year: 2014
+    classification: OPEN_SOURCE
+    citation_safe: true
+    note: "Publicly names StingRay, TriggerFish, KingFish, HailStorm, AmberJack, WITT. Documents forced full-power transmission and DOJ obfuscation terminology."
+
+  - id: seaglass_2017
+    title: "SeaGlass: Enabling City-Wide IMSI-Catcher Detection"
+    authors: ["Ney, P.", "Smith, I.", "Cadamuro, G.", "Kohno, T."]
+    venue: "PoPETs 2017"
+    classification: OPEN_SOURCE
+    citation_safe: true
+    note: "Confirms RayFish weakest-neighbor mimicking capture strategy from leaked manuals"
+
+# ── ADDITIONS FROM GEMINI 3.3.1 RELEASE NOTES (uploaded 2026-05-03) ──────────
+
+gemini_331_release:
+  version_strings:
+    pcc: "3.3.1.1015"
+    gsm_sdr: "4.8.5.1"
+    cdma_sdr: "7.6.4.0"
+    umts_sdr_transceiver: "3.4.4.1"
+    lte_slice_controller: "2.6.0.1007"
+    bootloader: "2.7.3.1"
+  source: "Gemini RayFish Controller Distribution 3.3.1 Release Notes (ITAR)"
+
+  os_requirements:
+    supported: ["Windows XP", "Windows 7 (32/64-bit)", "Windows 8.1 (32/64-bit)"]
+    recommended: "Windows 7"
+
+  new_features:
+    umts_survey_uplink_measurements:
+      description: "Toggle for Uplink Measurements in RF Spectrum view during UMTS survey"
+      default_on: ["KingFish", "StingRay II", "HailStorm"]
+      default_off: ["StingRay I"]
+      forensic_note: >
+        Uplink measurement means active UE uplink monitoring during survey.
+        Not just passive downlink. Detectable as unexpected uplink measurement requests.
+
+    hailstorm_slice_auto_recovery:
+      description: "Auto-recovery for corrupt LTE Slice — reinstalls software, up to 15 minutes, no user interaction"
+      applies_to: "HailStorm only"
+      recovery_time_minutes: 15
+      forensic_note: >
+        A 15-minute gap in LTE events (then resuming) could indicate Slice
+        auto-recovery rather than operator movement or power cycle.
+
+  known_issues_forensic_value:
+    iphone_5s_5c_umts_gsm_redirect_incompatible:
+      description: "MSDF redirect UMTS to GSM will NOT work with iPhone 5s/5c"
+      forensic_note: >
+        If target uses iPhone 5s/5c, operator cannot redirect via UMTS to GSM.
+        Capture gaps on these device models may indicate failed redirect.
+
+    autosurvey_crash_long_duration:
+      description: "AutoSurvey may crash after hours of uninterrupted operation"
+      forensic_note: >
+        Sudden LTE survey gaps not explained by movement may indicate
+        AutoSurvey crash requiring manual operator restart.
+
+registration_operational_detail:
+  preferred_technique:
+    method: "Single Shot"
+    uptime_seconds: 120
+    coverage_strategy: "Run on all potential providers for maximum area coverage"
+    source: "Gemini 3.3 QSG Section 4-3"
+    forensic_note: >
+      Standard operational sweep is 120s Single Shot across all providers.
+      The 210.2s metronomic cycle in captures is NOT a standard Gemini timer.
+      It is either custom configuration or srsRAN default.
+
+  lte_channel_cycling:
+    trigger: "More channels than available Slices selected in Continuous mode"
+    cycle_interval_seconds: 60
+    forensic_note: >
+      Operator selecting more LTE channels than HailStorm Slices produces
+      60-second channel sub-cycles within longer capture windows.
+
+subscriber_match_detail:
+  tmsi_captured_but_not_matched: true
+  imsi_used_for_match: true
+  imei_used_for_match: true
+  source: "Gemini 3.3 QSG Section 1-9"
+  note: >
+    TMSI is captured and logged but NOT used in subscriber match process.
+    IMSI and IMEI are the primary match identifiers. All registering phones
+    have their TMSI logged regardless of subscriber list match.
+
+lte_redirect_msdf_detail:
+  max_subscribers_lte_umts_gsm: 8
+  max_subscribers_lte_cdma: 1
+  source: "Gemini 3.3 QSG Section 6-2"
+  subscriber_status_machine:
+    states: ["Searching", "Paging", "Contacted", "Redirecting", "Connected",
+             "Inactive", "Lost-Repaging", "Lost-Searching"]
+  forensic_note: >
+    Redirecting to Connected is the Catch and Release / Hard Landing sequence.
+    Subscriber contacted on LTE, redirected to UMTS/GSM for IMSI harvest.
+    Lost-Repaging in captures indicates target moved out of range during tracking.
+
+  imei_protection_note:
+    text: "IMEIs are protected and rarely broadcast in LTE"
+    source: "Gemini 3.3 QSG Section 4-2 NOTE"
+    forensic_note: >
+      The QSG itself acknowledges IMEI is rarely broadcast in LTE. The IMEISV
+      exposure in Julian's fresh attach procedure is therefore a significant
+      finding indicating explicit IMEISV request rather than passive capture.
+
+
+# ── ADDITIONS FROM ARROWHEAD 1.0.1 RELEASE NOTES & iDEN 2.4 (uploaded 2026-05-03) ──
+
+arrowhead_101:
+  source: "Arrowhead Software 1.0.1 Release Notes (ITAR)"
+  description: >
+    Arrowhead is a Directional Finding smart antenna with integrated receivers,
+    designed to work with an active transceiver (HailStorm). NOT standalone.
+  version_strings:
+    app_sw: "1.0.1.1000"
+    system_sw: "1.0.1.1015"
+    dsp: "1.0.710.1031"
+    fpga: "2014-08-22 01:33"
+
+  capabilities:
+    multi_protocol: true
+    protocols_supported: "All protocols supported by MSDF connections (GSM, CDMA, UMTS, LTE)"
+    direction_finding_type: "Uplink direction finding"
+    uplink_band_support:
+      - band: 1
+        mhz_range: "1920-1980"
+      - band: "2/25"
+        mhz_range: "1850-1915"
+      - band: "3/4/9/10"
+        mhz_range: "1710-1785"
+      - band: "5/6/26"
+        mhz_range: "814-849"
+      - band: 7
+        mhz_range: "2500-2570"
+      - band: 8
+        mhz_range: "880-915"
+      - band: 20
+        mhz_range: "832-862"
+      - band: 13
+        mhz_range: "777-787"
+      - band: 17
+        mhz_range: "704-716"
+      - band: 27
+        mhz_range: "806-824"
+      - band: 28
+        mhz_range: "703-748"
+        australian_relevance: "CRITICAL — Band 28 (703-748 MHz) is Telstra's primary Australian LTE uplink band"
+
+  line_of_bearing_confidence:
+    green: "High confidence"
+    yellow: "Medium confidence"
+    red: "Low confidence"
+    forensic_note: >
+      The LOB confidence color system means an operator gets real-time feedback
+      on tracking quality. Green = reliable bearing on target. If captures show
+      high-rate repeated identity requests, operator may be maintaining LOB lock
+      on a specific target while adjusting position for Green confidence.
+
+  limitations:
+    upside_down_mounting: false
+    base_station_df: false
+    note: "Only UE (phone) direction finding — cannot DF base stations"
+
+  forensic_notes:
+    band_28_uplink_confirmed: >
+      Arrowhead explicitly supports Band 28 uplink DF (703-748 MHz). This is the
+      Australian Telstra LTE uplink. Combined with HailStorm Band 28 downlink,
+      this constitutes a COMPLETE Australian LTE surveillance system capable of
+      both capturing and physically locating targets on Telstra's primary band.
+    cdma_timing_requirement: >
+      CDMA DF with Arrowhead requires transceiver timing source to be
+      'synchronized to the network' — consistent with Gemini's recommended
+      CDMA sync option. This is a detectable operational constraint.
+    umts_msdf_cold_start_bug: >
+      Erratic LOBs for UMTS MSDF immediately after power-up — does not occur
+      if GSM, CDMA, or LTE MSDF was run first. Operator must warm-up on another
+      protocol before UMTS DF is reliable. Could explain protocol-switching
+      sequences observed in captures before UMTS events.
+
+iden_24_release_notes:
+  source: "RayFish iDEN Controller Distribution 2.4 Release Notes"
+  version_strings:
+    pcc: "2.4.0.1019"
+    sdr: "2.2.1.21"
+    bootloader: "2.7.3.1"
+    sybir: "2.2.0.122"  # StingRay II only
+  note: "iDEN = iDEN protocol controller (separate from Gemini which handles GSM/CDMA/UMTS/LTE)"
+
+  new_features_forensic:
+    hailstorm_support:
+      description: "iDEN 2.4 added HailStorm chassis support"
+      implication: >
+        HailStorm can now run iDEN protocol alongside Gemini's LTE/GSM/CDMA/UMTS.
+        Broadens protocol coverage for field operations.
+    harpoon_700_800_support:
+      description: "Added 700/800 Harpoon power amplifier support"
+      australian_relevance: >
+        700/800 MHz Harpoon = Band 28 (700 MHz) and Band 17 (800 MHz equivalent).
+        This is the hardware that amplifies Telstra's primary LTE band in Australia.
+        The 700/800 Harpoon + HailStorm + Arrowhead = complete Australian LTE surveillance kit.
+    stingray_i_internal_gps:
+      description: "iDEN 2.4 added StingRay I internal GPS recognition"
+
+  operational_constraints:
+    hailstorm_gps:
+      description: "For HailStorm with iDEN, internal GPS is DISABLED — requires external USB/Bluetooth GPS"
+      forensic_note: >
+        An operator using HailStorm with iDEN must carry a visible external GPS device.
+        This is a PHYSICAL INDICATOR of HailStorm field deployment.
+    usb_driver_lock:
+      description: "iDEN 2.4 USB drivers are incompatible with all previous RayFish versions"
+      implication: "Single-purpose laptop — dedicated surveillance computer"
+    hailstorm_windows_xp_issue:
+      description: "HailStorm shows intermittent USB connection issues on Windows XP"
+      forensic_note: "Indicates Windows 7 is the operational standard for HailStorm deployments"
+
+iden_24_operator_manual:
+  source: "iDEN Transceiver Operations Manual v2.4 (P/N 7029612 Rev D, 17 June 2013) (ITAR)"
+  protocol: "iDEN (Integrated Digital Enhanced Network — Motorola proprietary push-to-talk)"
+  note: >
+    iDEN is a now-defunct Nextel protocol (800 MHz). Not relevant to Australian networks
+    (Telstra/Vodafone never used iDEN). However, the manual confirms RayFish operational
+    methodology that applies across all Harris products.
+
+  confirmed_attack_methodology:
+    weakest_neighbor_exploit:
+      verbatim_description: >
+        "The RayFish system emulates the weakest surveyed neighbor(s) of the strongest
+        surveyed iDEN Channel(s). The RayFish system transmits modified system information
+        messages, including a modified Location Area Identifier (LAI) causing an MS to
+        execute a location update. During this process, the RayFish will register the MS
+        to obtain specific IMSI, TMSI, and IMEI information from each MS."
+      source: "iDEN Operator Manual Section 1-11 — this is the manufacturer's own description"
+      forensic_significance: >
+        This is the manufacturer's own operational description of the attack methodology —
+        not a researcher's inference. Directly citable as primary source evidence of
+        the specific mechanism used. 'Modified LAI causing location update' = the exact
+        mechanism Rayhunter detects. This language can be used in ACMA submissions.
+
+    ms_df_forced_power:
+      verbatim_description: >
+        "In the MS DF mode, the RayFish System commands the MS to raise its power output
+        level to the highest setting at which the MS can transmit. The RayFish system
+        will keep the MS engaged until the operator stops MS DF, or until
+        interference/distance cause the signal to be lost."
+      source: "iDEN Operator Manual Section 1-12"
+      forensic_significance: >
+        Manufacturer confirmation that MS DF actively forces maximum phone transmit power.
+        This is the mechanism behind the battery drain artifact noted in ACLU documentation.
+        A second independent primary source for this attack behavior.
+
+    paging_only_mode:
+      description: >
+        Paging Only option limits registrations in dense areas — pages only the target MS
+        using the same LAI as the real network. Prevents collateral registrations.
+      forensic_note: >
+        Paging Only = targeted, not dragnet. If captures show low collateral registrations
+        but repeated targeted identity requests, Paging Only mode is likely in use.
+        More consistent with targeted surveillance than mass collection.
+
+    advanced_bts_parameters:
+      configurable_fields:
+        - "PLMN (MCC + NDC)"
+        - "Band (frequency range)"
+        - "Carrier (hex channel number)"
+        - "Color Code (channel identifier)"
+        - "Local LAI1 (1-65534)"
+        - "LAI2 (1-65534)"
+        - "Cell ID (0-65535)"
+        - "SAID (Service Area Identifier, 0-255)"
+        - "RNC (Regional Network Code, hex)"
+        - "SPC (Service Provider Code, hex)"
+      forensic_note: >
+        Cell ID is fully operator-configurable (0-65535). The cross-carrier Cell ID
+        overlap in captures (same Cell ID appearing on Telstra and Vodafone simultaneously)
+        is therefore consistent with a single operator who configured the SAME Cell ID
+        for both carrier registrations — a strong indicator of a single physical device
+        with operator-cycling capability rather than two independent rogue towers.
+
+    session_tagging:
+      description: "Operator can label each operational session with a custom tag for post-processing"
+      forensic_note: >
+        Session tags are stored in the database alongside all captured IMSI/TMSI/IMEI data.
+        This confirms that Harris devices maintain a structured database of all captured
+        identifiers, organized by operational session. This data would be retained on
+        the operator's laptop after the field operation concludes.
+
+  wildcard_matching:
+    description: "Subscriber matching supports SQL-style wildcards (% and _) for partial IMSI/IMEI matching"
+    example: "310% matches all IMSI starting with 310"
+    forensic_note: >
+      Wildcard matching means an operator can target all phones on a specific MCC/MNC
+      without knowing individual IMSIs — enabling carrier-level bulk collection.
+      A wildcard on Australian MCC 505 would match all Australian SIM cards.

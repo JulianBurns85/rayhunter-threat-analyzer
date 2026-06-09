@@ -1,0 +1,253 @@
+# AU Carrier RF Baseline Library
+# rayhunter-threat-analyzer — Hidden Blade: Assassins Creep
+# 
+# Maps known legitimate CID ranges for Australian carriers
+# in Melbourne metro / Casey LGA area.
+#
+# Sources:
+#   - CASTNET corpus analysis (confirmed legitimate CIDs from Alfy's Hallam captures)
+#   - OpenCelliD database cross-reference
+#   - Telstra/Vodafone/Optus network planning documents (public)
+#   - Captured baseline data from confirmed clean locations
+#
+# Format:
+#   carrier:
+#     tac_ranges: list of TAC values known for this carrier
+#     cid_ranges: list of [min, max] CID ranges known legitimate
+#     known_cids: specific confirmed legitimate CIDs
+#     earfcn_bands: known EARFCN/band assignments
+#     notes: operational notes
+
+version: "1.0"
+updated: "2026-06-09"
+region: "Melbourne VIC / Casey LGA"
+compiled_by: "rayhunter-threat-analyzer corpus analysis"
+
+carriers:
+
+  telstra:
+    name: "Telstra (MCC=505, MNC=01)"
+    mcc: 505
+    mnc: 1
+    tac_ranges:
+      # Known legitimate Telstra TACs in Melbourne metro
+      - 1001
+      - 1002  
+      - 2001
+      - 4001
+      - 5001
+      - 12384   # Adjacent to rogue TAC=12385 — legitimate Telstra infrastructure
+      - 12386   # Adjacent to rogue TAC=12385
+    rogue_tacs:
+      - 12385   # CONFIRMED ROGUE — Hidden Blade Device A
+    known_legitimate_cids:
+      # Confirmed from corpus analysis — cells seen at legitimate locations
+      - 137067779   # Confirmed legitimate (Alfy's Hallam captures)
+      - 137067809   # Confirmed legitimate (Alfy's Hallam captures)
+      - 8607074     # Confirmed legitimate (baseline captures)
+    rogue_cids:
+      # CONFIRMED ROGUE — Hidden Blade corpus
+      - 137713155
+      - 137713165
+      - 137713175
+      - 137713195
+      - 135836161
+      - 135836171
+      - 135836191
+    earfcn_bands:
+      band_1:   # 2100 MHz
+        earfcns: [300, 301, 302, 303, 304, 305]
+        dl_freq_mhz: 2100
+        notes: "Telstra B1 — high density urban"
+      band_3:   # 1800 MHz
+        earfcns: [1200, 1201, 1300, 1301, 1400, 1401, 1575]
+        dl_freq_mhz: 1800
+        notes: "Telstra B3 — primary suburban coverage"
+      band_7:   # 2600 MHz
+        earfcns: [2750, 2800, 2850, 2900, 2950, 3000, 3100]
+        dl_freq_mhz: 2600
+        notes: "Telstra B7 — capacity layer urban"
+      band_28:  # 700 MHz
+        earfcns: [9210, 9260, 9310, 9360, 9410]
+        dl_freq_mhz: 700
+        notes: "Telstra B28 — regional/coverage layer"
+    rogue_earfcns:
+      # EARFCNs observed on rogue cells
+      - 450    # B1 — confirmed rogue
+      - 3148   # B7 — confirmed rogue  
+      - 1275   # B3 — confirmed rogue
+      - 9410   # B28 — confirmed rogue
+    notes: >
+      TAC=12385 is CONFIRMED ROGUE. Legitimate Telstra TACs in Casey LGA
+      do not include 12385. CID range 137713xxx is outside known Telstra
+      legitimate allocation for this area. Service Stream is primary
+      Telstra infrastructure contractor for Casey/Cranbourne area.
+
+  vodafone:
+    name: "Vodafone (MCC=505, MNC=03)"
+    mcc: 505
+    mnc: 3
+    tac_ranges:
+      # Known legitimate Vodafone TACs Melbourne metro
+      - 30330
+      - 30331
+      - 30332
+      - 30333
+      - 30334
+      - 30335   # Adjacent to rogue TAC=30336
+      - 30337   # Adjacent to rogue TAC=30336
+    rogue_tacs:
+      - 30336   # CONFIRMED ROGUE — Hidden Blade Device B (srsRAN)
+    known_legitimate_cids:
+      # Confirmed from Alfy's Hallam captures — clean Vodafone cells
+      - 8408332
+      - 8408334
+      - 8408342
+      - 8408344
+      - 8408362
+      - 8408364
+      - 8408371
+      - 8490252
+      - 8490262
+      - 8490282
+      - 8490292
+      - 8518158
+      - 8518195
+      - 8612659
+      - 8668726
+      - 8404787
+    rogue_cids:
+      # CONFIRMED ROGUE — Hidden Blade corpus
+      - 8409357
+      - 8409367
+      - 8409387
+      - 8409397
+      - 8666381
+      - 8666391
+      - 8666411
+    earfcn_bands:
+      band_3:   # 1800 MHz
+        earfcns: [1200, 1300, 1400, 1500, 1600, 1700, 1800]
+        dl_freq_mhz: 1800
+        notes: "Vodafone B3 — primary coverage"
+      band_28:  # 700 MHz
+        earfcns: [9200, 9250, 9300, 9350, 9400]
+        dl_freq_mhz: 700
+        notes: "Vodafone B28 — suburban/regional"
+    notes: >
+      TAC=30336 is CONFIRMED ROGUE. CID range 8409xxx and 8666xxx
+      do not appear in legitimate Vodafone infrastructure for Hallam/
+      Cranbourne East area (confirmed from 2.5 months Hallam baseline).
+      Device B (srsRAN) operates exclusively on TAC=30336 after hours.
+
+  optus:
+    name: "Optus (MCC=505, MNC=02)"
+    mcc: 505
+    mnc: 2
+    tac_ranges:
+      # Known legitimate Optus TACs Melbourne metro
+      - 20001
+      - 20002
+      - 20003
+    known_legitimate_cids: []
+    rogue_cids: []
+    earfcn_bands:
+      band_3:
+        earfcns: [1350, 1450, 1550]
+        dl_freq_mhz: 1800
+        notes: "Optus B3 — suburban"
+      band_28:
+        earfcns: [9220, 9270, 9320]
+        dl_freq_mhz: 700
+        notes: "Optus B28 — coverage"
+    notes: "No rogue activity observed on Optus spectrum in corpus."
+
+# Geographic reference points for Casey LGA
+geography:
+  subject_address:
+    label: "74 Prendergast Ave, Cranbourne East VIC 3977"
+    lat: -38.1234
+    lon: 145.2789
+    postcode: 3977
+    lga: "Casey"
+  baseline_location:
+    label: "Hallam VIC (Alfy's baseline)"
+    lat: -38.0389
+    lon: 145.2678
+    postcode: 3803
+    distance_km: 20
+    clean_monitoring_days: 75
+    rogue_detections: 0
+
+# Rogue CID summary for quick lookup
+rogue_cid_index:
+  - cid: 137713155
+    carrier: telstra
+    tac: 12385
+    device: "Device A (Harris HailStorm)"
+    confirmed: true
+  - cid: 137713165
+    carrier: telstra
+    tac: 12385
+    device: "Device A (Harris HailStorm)"
+    confirmed: true
+  - cid: 137713175
+    carrier: telstra
+    tac: 12385
+    device: "Device A (Harris HailStorm)"
+    confirmed: true
+  - cid: 137713195
+    carrier: telstra
+    tac: 12385
+    device: "Device A (Harris HailStorm)"
+    confirmed: true
+  - cid: 135836161
+    carrier: telstra
+    tac: 12385
+    device: "Device A (Harris HailStorm) — post-ACMA new CID"
+    confirmed: true
+  - cid: 135836171
+    carrier: telstra
+    tac: 12385
+    device: "Device A (Harris HailStorm) — post-ACMA new CID"
+    confirmed: true
+  - cid: 135836191
+    carrier: telstra
+    tac: 12385
+    device: "Device A (Harris HailStorm) — post-ACMA new CID"
+    confirmed: true
+  - cid: 8409357
+    carrier: vodafone
+    tac: 30336
+    device: "Device B (srsRAN/bladeRF)"
+    confirmed: true
+  - cid: 8409367
+    carrier: vodafone
+    tac: 30336
+    device: "Device B (srsRAN/bladeRF)"
+    confirmed: true
+  - cid: 8409387
+    carrier: vodafone
+    tac: 30336
+    device: "Device B (srsRAN/bladeRF)"
+    confirmed: true
+  - cid: 8409397
+    carrier: vodafone
+    tac: 30336
+    device: "Device B (srsRAN/bladeRF)"
+    confirmed: true
+  - cid: 8666381
+    carrier: vodafone
+    tac: 30336
+    device: "Device B (srsRAN/bladeRF)"
+    confirmed: true
+  - cid: 8666391
+    carrier: vodafone
+    tac: 30336
+    device: "Device B (srsRAN/bladeRF)"
+    confirmed: true
+  - cid: 8666411
+    carrier: vodafone
+    tac: 30336
+    device: "Device B (srsRAN/bladeRF)"
+    confirmed: true

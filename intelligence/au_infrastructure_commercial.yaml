@@ -1,0 +1,294 @@
+---
+# Australian RF Signature Library — Infrastructure & Commercial Fleets
+# All data sourced from public procurement, vendor documentation, ACMA register
+# Version: 1.0 | June 2026
+
+meta:
+  category: infrastructure_commercial
+  jurisdiction: australia_primary
+  last_updated: "2026-06-06"
+  sources:
+    - "VicRoads / DoT Victoria ICT procurement notices"
+    - "Redflex Holdings product documentation"
+    - "Acusensus public technical documentation"
+    - "Genetec public partner documentation"
+    - "Navman Wireless / Mix Telematics product specs"
+    - "MTData fleet management documentation"
+    - "Zebra Technologies TC-series datasheets"
+
+signatures:
+
+  # ─── ANPR / TRAFFIC ENFORCEMENT ────────────────────────────────────
+
+  - id: vicroads_mobile_anpr_trailer
+    label: "VicRoads / TMC mobile ANPR trailer"
+    category: infrastructure
+    subcategory: traffic_enforcement
+    confidence_base: 0.78
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: event_burst
+        burst_size_kb_typical: 80
+        notes: "Plate capture event triggers upload — Redflex or Acusensus unit"
+        burst_cluster_note: "Multiple bursts when vehicle-dense — intersections, highways"
+      - type: wifi
+        standard: 802.11ac
+        freq_ghz: 5.0
+        pattern: maintenance_only
+        notes: "WiFi only active during technician maintenance — not operational"
+    notable_absence:
+      - tetra: "Not on GRN"
+      - bluetooth: "No BT advertisement"
+    hardware:
+      anpr_unit: "Redflex RedFlex Halo or Acusensus Heads-Up"
+      modem: "Sierra Wireless RV55 or Teltonika RUT955"
+    sources:
+      - "Redflex Holdings product documentation"
+      - "Acusensus technical brief — mobile ANPR"
+      - "VicRoads mobile enforcement procurement 2022"
+
+  - id: vicroads_fixed_speed_camera
+    label: "Fixed speed / red light camera (VicRoads)"
+    category: infrastructure
+    subcategory: traffic_enforcement
+    confidence_base: 0.65
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: scheduled_low_duty
+        notes: "Fixed backhaul — periodic health check and batch upload"
+        typical_interval_s: 300
+      - type: wifi
+        standard: 802.11n
+        freq_ghz: 2.4
+        pattern: maintenance_ap
+        ssid_pattern: "REDFLEX_*  or  JENOPTIK_*"
+        notes: "Maintenance AP — visible when technician van in area"
+    detection_notes: >
+      Fixed cameras are stationary — useful as known-location anchors
+      for CASTNET baseline mapping. Their regular heartbeat LTE pattern
+      can serve as a stable reference signal.
+    sources:
+      - "Jenoptik Traffic Solutions Australia documentation"
+      - "Redflex fixed camera product sheet"
+
+  - id: bluetooth_wifi_travel_time_sensor
+    label: "VicRoads BT/WiFi travel time sensor"
+    category: infrastructure
+    subcategory: traffic_monitoring
+    confidence_base: 0.80
+    signals:
+      - type: bluetooth
+        standard: bluetooth_4_0
+        freq_ghz: 2.4
+        pattern: passive_scan_only
+        notes: >
+          PASSIVE scanner — does NOT advertise. Sniffs passing BT MAC
+          addresses for travel time calculation. Detectable only by
+          absence of advertisement from a known fixed location.
+      - type: wifi
+        standard: 802.11n
+        freq_ghz: [2.4, 5.0]
+        pattern: passive_probe_capture
+        notes: "Captures probe requests from passing devices — does not beacon"
+    detection_challenge: >
+      This device is intentionally silent. Detection requires noting
+      absence of advertisement at known sensor locations (documented
+      in VicRoads traffic sensor register). ~100 sensors across Melbourne.
+    known_locations_source: "VicRoads open data — traffic sensor locations"
+    sources:
+      - "VicRoads Bluetooth Travel Time Sensors — public fact sheet 2019"
+      - "DoT Victoria open data portal — sensor locations"
+
+  # ─── UTILITIES ──────────────────────────────────────────────────────
+
+  - id: smart_meter_reading_vehicle
+    label: "Smart meter reading vehicle (Citipower/Powercor/AusNet)"
+    category: infrastructure
+    subcategory: utilities
+    confidence_base: 0.72
+    signals:
+      - type: ismsub_ghz
+        freq_mhz: 915.0
+        band: 915mhz_ism_au
+        protocol: zigbee_or_wisun
+        pattern: drive_by_poll
+        notes: >
+          Itron or Landis+Gyr handheld reader polls smart meters at
+          915MHz as vehicle drives past. Brief burst ~50ms per meter.
+          UNIQUE to meter reading — almost nothing else on 915MHz ISM in AU.
+        burst_duration_ms: 50
+        detection_spacing_m: ~10
+      - type: lte
+        carrier: telstra_or_optus
+        band: B28
+        pattern: batch_upload
+        notes: "Meter data uploaded at end of route"
+    hardware:
+      reader: "Itron FC300 or Landis+Gyr Gridstream handheld"
+    alert_level: info
+    display_color: yellow
+    sources:
+      - "Itron FC300 datasheet — 915MHz AMI"
+      - "Landis+Gyr Gridstream product brief"
+      - "ACMA 915MHz ISM band plan"
+
+  - id: citipower_field_vehicle
+    label: "Citipower / Powercor field vehicle"
+    category: infrastructure
+    subcategory: utilities
+    confidence_base: 0.60
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: periodic_tracking
+        typical_interval_s: 60
+        notes: "Mix Telematics fleet tracking"
+      - type: uhf_cb
+        freq_mhz: 476.4125
+        notes: "UHF CB ch40 — field crew short-range coordination"
+    sources:
+      - "Mix Telematics — Citipower fleet contract"
+      - "ACMA UHF CB licence register"
+
+  # ─── COMMERCIAL FLEETS ──────────────────────────────────────────────
+
+  - id: taxi_silver_top_vehicle
+    label: "Silver Top / 13CABS taxi"
+    category: commercial_fleet
+    subcategory: taxi
+    confidence_base: 0.75
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: continuous_low
+        notes: "MTData dispatch terminal — Telstra LTE primary"
+      - type: lte
+        carrier: telstra_or_optus
+        band: B28
+        pattern: transaction_burst
+        burst_size_kb: ~5
+        notes: "Cabcharge EFTPOS terminal — payment transaction burst"
+      - type: wifi
+        standard: 802.11n
+        freq_ghz: 2.4
+        ssid_pattern: "TAXI_* or CABCHARGE_*"
+        notes: "EFTPOS terminal WiFi — sometimes bridges to dispatch unit"
+    differentiator: "Dual LTE modem signature (dispatch + EFTPOS) in same vehicle"
+    hardware:
+      dispatch: "MTData DT400 or Cabcharge E-ticket tablet"
+      eftpos: "Cabcharge EFTPOS — Telstra or Optus 4G"
+    sources:
+      - "MTData product documentation"
+      - "Cabcharge EFTPOS terminal specifications"
+
+  - id: australia_post_delivery_vehicle
+    label: "Australia Post delivery vehicle"
+    category: commercial_fleet
+    subcategory: postal_courier
+    confidence_base: 0.72
+    signals:
+      - type: bluetooth
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        pattern: scan_and_pair
+        notes: "Zebra TC52 or TC57 scanner — BT pairing to vehicle dock"
+        advertisement_interval_ms: 200
+      - type: wifi
+        standard: 802.11ac
+        freq_ghz: [2.4, 5.0]
+        pattern: scan_and_connect
+        notes: "Scanner connects to depot WiFi for batch sync — visible in transit as active scanner"
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: periodic_tracking
+        typical_interval_s: 30
+        notes: "Navman Wireless fleet tracking"
+    hardware:
+      scanner: "Zebra TC52 / TC57 — documented AusPost procurement"
+      fleet_tracker: "Navman Wireless MiFleet"
+    sources:
+      - "Zebra TC52 Enterprise Mobile Computer datasheet"
+      - "AusPost AusTender fleet management procurement"
+
+  - id: toll_dhl_courier_vehicle
+    label: "Toll / DHL / StarTrack courier vehicle"
+    category: commercial_fleet
+    subcategory: courier
+    confidence_base: 0.65
+    signals:
+      - type: bluetooth
+        standard: bluetooth_4_2
+        freq_ghz: 2.4
+        pattern: active_scan
+        advertisement_interval_ms: 300
+        notes: "Zebra or Honeywell handheld scanner"
+      - type: lte
+        carrier: telstra_or_optus
+        band: B28
+        pattern: scan_event_burst
+        notes: "Each scan triggers small LTE upload — high frequency in dense areas"
+    sources:
+      - "Zebra Technologies TC-series datasheet"
+      - "Honeywell CT60 mobile computer datasheet"
+
+  - id: nbn_field_technician_vehicle
+    label: "NBN Co / Telstra / Optus field tech vehicle"
+    category: commercial_fleet
+    subcategory: telco_field
+    confidence_base: 0.68
+    signals:
+      - type: lte
+        carrier: telstra
+        band: B28
+        pattern: continuous_moderate
+        notes: "Whole-of-company Telstra device — continuous connection"
+      - type: wifi
+        standard: 802.11ac
+        freq_ghz: [2.4, 5.0]
+        pattern: hotspot_active
+        ssid_pattern: "NBN_TECH_* or TELSTRA_FIELD_*"
+        notes: "Mobile hotspot for test equipment — often open or WPA2 with predictable PSK"
+      - type: bluetooth
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        pattern: test_equipment_pairing
+        notes: "Viavi or JDSU test sets pair via BT to tablet — EXFO test gear common"
+    forensic_note: >
+      Telstra field tech vehicles in vicinity of rogue cell site are
+      significant. Correlate timestamps with attack events.
+      Telstra technicians may be servicing Cel-Fi G51 or similar
+      equipment. Vehicle presence ± known attack timestamp = relevant.
+    alert_level: flag
+    display_color: amber
+    sources:
+      - "EXFO FTB-1 Pro field test unit datasheet"
+      - "Viavi OneExpert DSL test set specifications"
+      - "NBN Co AusTender field services contracts"
+
+  - id: uber_rideshare_vehicle
+    label: "Uber / rideshare driver vehicle"
+    category: commercial_fleet
+    subcategory: rideshare
+    confidence_base: 0.35
+    signals:
+      - type: lte
+        carrier: any
+        pattern: continuous_personal_phone
+        notes: "No dedicated hardware — driver's personal phone only"
+      - type: bluetooth
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        pattern: phone_carplay_android_auto
+        notes: "Car stereo pairing — not distinguishable from any commuter"
+    notes: >
+      Rideshare vehicles have NO distinctive RF signature beyond a
+      normal smartphone. Cannot be passively differentiated from
+      any other private vehicle. Excluded from high-confidence profiling.
+    confidence_note: "Low confidence — include only as contextual data point"

@@ -1,0 +1,62 @@
+# GERAN Redirect Attack Intelligence (2G Forced Downgrade)
+# Source: 3GPP TS 36.331, Australian 2G shutdown documentation
+# Last updated: 2026-05-22
+
+metadata:
+  title: "GERAN Redirect / 2G Forced Downgrade Attack"
+  attack_class: "Protocol Downgrade / Network Steering"
+  severity: CRITICAL
+  references:
+    - "3GPP TS 36.331 §5.3.12 — RRC Connection Release with redirect"
+    - "3GPP TS 33.401 Annex C.1 — Security considerations for inter-RAT"
+
+description: >
+  A GERAN redirect attack occurs when a rogue LTE eNodeB sends an
+  RRCConnectionRelease message containing a redirectedCarrierInfo IE
+  specifying a GERAN (GSM/2G) carrier. This forces the UE to drop its
+  LTE connection and camp on a 2G network.
+
+  In 2G, GSM's A5/1 cipher is cryptanalytically broken and A5/0
+  (no cipher) is trivially intercepted. This creates a two-stage attack:
+  Stage 1: Rogue LTE eNodeB forces 2G downgrade
+  Stage 2: Paired GSM IMSI catcher captures plaintext 2G traffic
+
+australian_significance:
+  critical_context: >
+    Australia's 2G (GSM/GERAN) networks were completely shut down in 2018.
+    There is NO legitimate 2G infrastructure in Australia for a UE to
+    connect to after a GERAN redirect. Any GERAN redirect in Australian
+    LTE captures is therefore forensically anomalous — it serves no
+    legitimate network purpose and is a strong indicator of rogue
+    infrastructure attempting a downgrade attack.
+  legal_reference: "Radiocommunications Act 1992 (Cth) s.189"
+
+attack_chain:
+  stage_1:
+    action: "Rogue LTE eNodeB sends RRCConnectionRelease + GERAN redirect"
+    message: "RRCConnectionRelease with redirectedCarrierInfo.geranTarget"
+    spec: "3GPP TS 36.331 §5.3.12"
+  stage_2:
+    action: "UE camps on 2G GSM cell (attacker-controlled or legacy)"
+    result: "A5/1 or A5/0 cipher — interceptable"
+  stage_3:
+    action: "Paired GSM IMSI catcher captures identity and traffic"
+    result: "IMSI harvest + call/SMS interception"
+
+detection:
+  rayhunter_indicator: "RRCConnectionRelease containing geranTarget IE"
+  tshark_command: >
+    tshark -r <file> -Y 'lte_rrc.RRCConnectionRelease_element'
+    -T fields -e lte_rrc.redirectedCarrierInfo
+
+hardware_correlation:
+  consistent_with:
+    - "Any rogue LTE eNodeB with full RRC stack"
+    - "srsRAN with custom RRC release handler"
+    - "Harris StingRay II / HailStorm (documented GERAN redirect capability)"
+    - "Septier GUARDIAN"
+
+severity_notes: >
+  In Australia, GERAN redirect severity is automatically CRITICAL due to
+  2G network shutdown. In other jurisdictions where 2G still operates,
+  severity should be assessed against local network topology.

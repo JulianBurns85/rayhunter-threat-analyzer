@@ -1,0 +1,466 @@
+# hardware_id_library.yaml
+# Complete IMSI Catcher Hardware Identification Library
+# rayhunter-threat-analyzer v3.6
+#
+# Sources:
+#   - EFF Street Level Surveillance project
+#   - The Intercept leaked government catalogue
+#   - Academic literature (Dabrowski, Tucker, Zhuang, Ali)
+#   - Public patent filings
+#   - Manufacturer product pages (where public)
+#   - FCC equipment authorisation database
+#
+# Each entry includes observable RF signatures that can be
+# detected from passive monitoring without bladeRF IQ capture.
+# bladeRF signatures require IQ data (marked with [IQ_REQUIRED]).
+
+---
+
+professional_tier_1:
+  # The gold standard -- government and military grade
+  # These are what legitimate law enforcement uses under warrant
+
+  harris_hailstorm_ii:
+    manufacturer: "L3Harris Technologies (formerly Harris Corporation)"
+    country: "USA"
+    product_line: "StingRay family"
+    models:
+      - "HailStorm II"
+      - "HailStorm I"
+      - "StingRay II"
+      - "StingRay I"
+      - "KingFish"
+      - "ArrowFish"
+      - "AmberJack"
+    capabilities:
+      standards: ["GSM", "CDMA", "UMTS", "LTE"]
+      bands: [1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 25, 26, 28, 41]
+      simultaneous_bands: true
+      rf_chains: 4
+      max_power_dbm: 33
+      modes:
+        - "IMSI capture"
+        - "IMEI capture"
+        - "IMEISV capture"
+        - "Location tracking"
+        - "Active interception"
+        - "SMS intercept"
+        - "Voice intercept"
+        - "Data intercept"
+        - "ProSe proximity tracking"
+    rf_signatures:
+      oscillator: "OCXO"
+      frequency_accuracy_ppm: 0.01
+      drift_ppm_per_hour: 0.001
+      beacon_interval_ms: [80, 160]
+      beacon_jitter_ms: 0.5
+      phase_noise_dbc_hz_at_10khz: -150
+      rsrp_variance_typical: 4.0
+      power_ramp_pattern: "smooth_3gpp_compliant"
+      sib1_period_ms: 80
+      handover_pattern: "3gpp_compliant"
+    detection_indicators:
+      - "Auth Reject followed immediately by Identity Request"
+      - "Zero EEA0 cipher (transparent proxy mode)"
+      - "IMEISV request without prior authentication"
+      - "ProSe direct discovery advertisements"
+      - "Measurement report interval exactly 80ms or 160ms"
+      - "No forced 2G downgrade (LTE transparent proxy)"
+      - "TA highly consistent (OCXO disciplined)"
+    estimated_cost_usd: 400000
+    export_controlled: true
+    export_authority: "ITAR controlled -- US State Department licence required"
+    known_australian_operators:
+      - "Australian Federal Police"
+      - "ASIO"
+      - "ASD (Australian Signals Directorate)"
+      - "State police forces (by AFP arrangement)"
+    notes: >
+      Harris equipment requires a lawful interception warrant in Australia.
+      AFP FOI response confirming nil documents means no active Harris
+      deployment against the subject under any authorised operation.
+      Any Harris-signature detections are therefore UNLAWFUL.
+
+  harris_drt_series:
+    manufacturer: "L3Harris Technologies"
+    models:
+      - "DRT 1101B"
+      - "DRT 1301"
+      - "DRTbox"
+    capabilities:
+      standards: ["GSM", "CDMA", "LTE"]
+      bands: [1, 3, 7, 28]
+      simultaneous_bands: false
+      rf_chains: 1
+      max_power_dbm: 27
+    rf_signatures:
+      oscillator: "TCXO"
+      frequency_accuracy_ppm: 0.5
+      beacon_interval_ms: [160]
+      beacon_jitter_ms: 2.0
+      phase_noise_dbc_hz_at_10khz: -140
+    notes: "Vehicle-mounted variant. Less capable than HailStorm."
+
+  septier_guardian:
+    manufacturer: "Septier Communication Ltd"
+    country: "Israel"
+    models:
+      - "Septier GUARDIAN"
+      - "Septier CATCHER"
+      - "Septier IMSIme"
+    capabilities:
+      standards: ["GSM", "UMTS", "LTE", "5G-NSA"]
+      bands: [1, 3, 7, 8, 20, 28, 38, 40, 41]
+      simultaneous_bands: true
+      rf_chains: 3
+      max_power_dbm: 30
+      modes:
+        - "IMSI/IMEI capture"
+        - "6-identifier harvest (IMSI, IMEI, IMEISV, TMSI, MSISDN, ICCID)"
+        - "Facial recognition cross-reference"
+        - "Licence plate cross-reference"
+        - "Passport cross-reference"
+        - "Real-time decryption"
+    rf_signatures:
+      oscillator: "OCXO"
+      frequency_accuracy_ppm: 0.01
+      beacon_interval_ms: [80, 160]
+      beacon_jitter_ms: 1.0
+      sib_pattern: "3gpp_compliant"
+    detection_indicators:
+      - "6-identifier harvest in single session"
+      - "Multi-band simultaneous operation"
+      - "Very low beacon jitter"
+    estimated_cost_usd: 300000
+    export_controlled: true
+
+  rohde_schwarz_ga090:
+    manufacturer: "Rohde & Schwarz GmbH & Co KG"
+    country: "Germany"
+    models:
+      - "GA090"
+      - "WEST"
+      - "R&S EMSB"
+    capabilities:
+      standards: ["GSM", "UMTS", "LTE", "5G"]
+      simultaneous_bands: true
+      rf_chains: 4
+    rf_signatures:
+      oscillator: "OCXO_GPS_HYBRID"
+      frequency_accuracy_ppm: 0.005
+      beacon_interval_ms: [80, 160]
+      beacon_jitter_ms: 0.2
+      phase_noise_dbc_hz_at_10khz: -155
+    detection_indicators:
+      - "Extremely low beacon jitter (< 0.5ms)"
+      - "Multi-band simultaneous without RSRP correlation break"
+    notes: "Highest quality professional hardware. Used by ACMA field teams."
+
+  bae_systems_kestrel:
+    manufacturer: "BAE Systems"
+    country: "UK/USA"
+    models:
+      - "Kestrel"
+      - "IMSI Catcher (classified designation)"
+    capabilities:
+      standards: ["GSM", "UMTS", "LTE"]
+    rf_signatures:
+      oscillator: "OCXO"
+      beacon_interval_ms: [80, 160]
+    notes: "Allied government use. Unlikely in Australian civilian context."
+
+professional_tier_2:
+  # Mid-range professional -- cheaper, more accessible
+
+  pki_electronic_1625:
+    manufacturer: "PKI Electronic Intelligence GmbH"
+    country: "Germany"
+    models:
+      - "PKI 1625"
+      - "PKI 1630"
+      - "PKI 1650"
+    capabilities:
+      standards: ["GSM", "UMTS", "LTE"]
+      bands: [1, 3, 7, 28]
+      simultaneous_bands: false
+      max_power_dbm: 27
+    rf_signatures:
+      oscillator: "TCXO"
+      frequency_accuracy_ppm: 0.5
+      beacon_interval_ms: [160, 320]
+      beacon_jitter_ms: 5.0
+      rsrp_variance_typical: 16.0
+    detection_indicators:
+      - "160ms or 320ms SIB1 interval"
+      - "Single-band operation per session"
+      - "TCXO drift visible over multi-hour sessions"
+    estimated_cost_usd: 50000
+    export_controlled: true
+    notes: >
+      PKI 1625 scored highest in Tucker et al. NDSS 2025 hardware
+      attribution for this investigation corpus. Mid-tier professional
+      device accessible to well-funded private operators.
+
+  phantom_technologies:
+    manufacturer: "Phantom Technologies Ltd"
+    country: "Israel"
+    models:
+      - "Phantom UMTS Catcher"
+      - "Phantom LTE Catcher"
+      - "Phantom 5G"
+    capabilities:
+      standards: ["UMTS", "LTE", "5G-NSA"]
+      simultaneous_bands: false
+    rf_signatures:
+      oscillator: "TCXO"
+      beacon_interval_ms: [160]
+      beacon_jitter_ms: 8.0
+
+  comstrac:
+    manufacturer: "Comstrac Ltd"
+    country: "UK"
+    models:
+      - "Comstrac portable"
+      - "Comstrac vehicle"
+    rf_signatures:
+      oscillator: "TCXO"
+      beacon_interval_ms: [160, 240]
+      beacon_jitter_ms: 10.0
+
+  datong_seven_technologies:
+    manufacturer: "Datong (Seven Technologies Group)"
+    country: "UK"
+    models:
+      - "Datong S4000"
+      - "Datong cellular"
+    rf_signatures:
+      oscillator: "TCXO"
+      beacon_interval_ms: [160]
+
+  revector_uav:
+    manufacturer: "Revector Ltd"
+    country: "UK"
+    models:
+      - "Revector Typhoon"
+      - "Revector drone payload"
+    capabilities:
+      standards: ["GSM", "LTE"]
+      platforms: ["Vehicle", "UAV/drone", "Backpack"]
+      special_features:
+        - "Battery drain attack (marketed feature)"
+        - "SMS spoofing"
+        - "Selective per-target jamming"
+        - "400MHz-3GHz coverage"
+      uav_integration: "Cannon Dynamics Sword UAV (200km range)"
+    rf_signatures:
+      oscillator: "VCTCXO"
+      frequency_accuracy_ppm: 1.0
+      beacon_interval_ms: [240, 480]
+      beacon_jitter_ms: 15.0
+    detection_indicators:
+      - "Unusual TA values if airborne"
+      - "Higher RSRP variance (VCTCXO)"
+      - "Rapid appearance/disappearance if drone-mounted"
+    notes: "Drone-deployable. TA=1282 in Vodafone platform may indicate this."
+
+consumer_sdr_platforms:
+  # Assembled from commercial SDR hardware + open source software
+  # These are what a technically sophisticated individual could build
+
+  srslte_bladerf:
+    platform: "srsRAN eNB + BladeRF 2.0 micro xA4"
+    software: "srsRAN (formerly srsLTE)"
+    hardware: "BladeRF 2.0 micro xA4 with BT-200 LNA"
+    country: "Open source (Amarisoft/academic origin)"
+    capabilities:
+      standards: ["LTE"]
+      bands: [1, 3, 7, 28]
+      simultaneous_bands: false
+      max_power_dbm: 10
+      modes:
+        - "IMSI capture (via auth reject)"
+        - "IMEI/IMEISV capture"
+        - "Location tracking"
+        - "Limited interception"
+    rf_signatures:
+      oscillator: "VCTCXO"
+      hardware_oscillator: "BladeRF VCTCXO 38.4MHz reference"
+      frequency_accuracy_ppm: 1.0
+      drift_ppm_per_hour: 0.5
+      beacon_interval_ms: [2000, 2100]
+      beacon_jitter_ms: 50.0
+      measurement_report_period_ms: 2000
+      rsrp_variance_typical: 36.0
+      phase_noise_dbc_hz_at_10khz: -120
+    detection_indicators:
+      - "~2.10s inter-event interval (srsRAN measurement_report_period=2000ms)"
+      - "High beacon jitter (50ms+) from Linux/Windows scheduling"
+      - "Single band per session"
+      - "VCTCXO drift visible over hours"
+      - "srsRAN default eNB config: standard cell indices"
+      - "Auth reject NAS message matches srsRAN template"
+    forensic_artifacts:
+      - "srsRAN eNB log: /tmp/srsran/enb.log"
+      - "srsRAN config: /etc/srsran/enb.conf"
+      - "GNU Radio flowgraph files: *.grc"
+      - "BladeRF firmware: bladeRF-cli -e version"
+    software_config_evidence:
+      enb_conf_fields:
+        - "enb_id = 537942"
+        - "mcc = 505"
+        - "mnc = 01"
+        - "tac = 12385"
+        - "dl_earfcn = [BAND-SPECIFIC]"
+    estimated_cost_aud: 800
+    technical_skill_required: "HIGH -- RF engineering + Linux sysadmin"
+    notes: >
+      This is the most likely Device B based on the 2.10s interval
+      signature observed in the CASTNET corpus. The operator would
+      need the bladeRF hardware (available commercially, ~$600 AUD),
+      a laptop running Ubuntu or similar, and srsRAN software (free,
+      open source). Configuration requires knowledge of local Telstra
+      TAC and eNB allocation -- consistent with telco contractor background.
+
+  srslte_limesdr:
+    platform: "srsRAN eNB + LimeSDR"
+    hardware: "LimeSDR Mini or LimeSDR USB"
+    rf_signatures:
+      oscillator: "VCTCXO"
+      frequency_accuracy_ppm: 1.0
+      beacon_interval_ms: [2000, 2100]
+      beacon_jitter_ms: 45.0
+    notes: "Functionally similar to BladeRF variant."
+
+  srslte_hackrf:
+    platform: "srsRAN eNB + HackRF One"
+    hardware: "HackRF One"
+    rf_signatures:
+      oscillator: "BASIC_XO"
+      frequency_accuracy_ppm: 20.0
+      beacon_interval_ms: [2000, 2200]
+      beacon_jitter_ms: 100.0
+    notes: >
+      HackRF has poor frequency accuracy and high jitter.
+      Would produce very noisy signal. Possible but less likely
+      than BladeRF or LimeSDR for sustained operation.
+
+  openlte_platform:
+    platform: "OpenLTE + any SDR"
+    software: "OpenLTE (open source)"
+    rf_signatures:
+      beacon_interval_ms: [1000, 1050]
+      beacon_jitter_ms: 30.0
+    detection_indicators:
+      - "~1.024s inter-event interval (OpenLTE default frame-aligned)"
+    notes: "Less common than srsRAN. Would show different interval to observed 2.10s."
+
+  osmocombb_platform:
+    platform: "OsmocomBB (primarily 2G/GSM)"
+    rf_signatures:
+      beacon_interval_ms: [480]
+    notes: "Primarily GSM. LTE capability limited. Less relevant here."
+
+hardware_matching_rules:
+  # Rules for matching observed data to hardware
+  # Priority: higher weight rules take precedence
+
+  rule_srslte_confirmed:
+    weight: 10
+    conditions:
+      - "beacon_interval_2000_to_2150ms_fraction > 0.10"
+    conclusion: "srsRAN consumer SDR platform CONFIRMED"
+    hardware: ["srslte_bladerf", "srslte_limesdr"]
+    severity: "CRITICAL"
+
+  rule_professional_hardware:
+    weight: 9
+    conditions:
+      - "beacon_interval_80ms_or_160ms_fraction > 0.50"
+      - "beacon_jitter_ms < 5"
+    conclusion: "Professional hardware CONFIRMED (Harris/Septier/R&S)"
+    hardware: ["harris_hailstorm_ii", "septier_guardian", "rohde_schwarz_ga090"]
+    severity: "CRITICAL"
+
+  rule_dual_stack:
+    weight: 10
+    conditions:
+      - "beacon_interval_2000_to_2150ms_fraction > 0.05"
+      - "beacon_interval_80ms_or_160ms_fraction > 0.05"
+    conclusion: "DUAL HARDWARE STACK -- professional + consumer SDR CONFIRMED"
+    hardware: ["harris_hailstorm_ii", "srslte_bladerf"]
+    severity: "CRITICAL"
+    notes: >
+      This is the highest-confidence finding. Presence of BOTH
+      professional timing (80/160ms) AND consumer SDR timing (2100ms)
+      in the same corpus is physically impossible from a single device.
+
+  rule_band_incompatible_copresence:
+    weight: 10
+    conditions:
+      - "band_28_and_band_3_simultaneous OR band_28_and_band_7_simultaneous"
+    conclusion: "Single-chain SDR RULED OUT -- multi-chain or dual device"
+    severity: "CRITICAL"
+
+  rule_vctcxo_oscillator:
+    weight: 5
+    conditions:
+      - "rsrp_variance > 25"
+      - "drift_coefficient_abs > 0.1"
+    conclusion: "VCTCXO oscillator consistent with consumer SDR hardware"
+    hardware: ["srslte_bladerf", "srslte_limesdr"]
+
+  rule_ocxo_oscillator:
+    weight: 5
+    conditions:
+      - "rsrp_variance < 9"
+      - "drift_coefficient_abs < 0.01"
+    conclusion: "OCXO oscillator consistent with professional hardware"
+    hardware: ["harris_hailstorm_ii", "septier_guardian"]
+
+forensic_search_guidance:
+  # What to look for when executing a search warrant
+
+  computer_artifacts:
+    srsran:
+      - path: "/etc/srsran/enb.conf"
+        look_for: ["enb_id", "tac", "mcc", "mnc", "dl_earfcn"]
+      - path: "/tmp/srsran/"
+        look_for: ["enb.log", "captured_imsi.csv", "ue_imsi_imei.txt"]
+      - path: "~/srsran/"
+        look_for: ["enb.conf", "rr.conf", "drb.conf"]
+      - path: "C:/srsran/"  # Windows path
+        look_for: ["enb.conf"]
+    gnu_radio:
+      - path: "*.grc"
+        look_for: ["bladerf", "srsran", "lte_enb", "537942"]
+    bladerf:
+      - command: "bladeRF-cli -e version"
+        significance: "Confirms bladeRF hardware present"
+      - path: "~/.config/bladeRF/"
+        look_for: ["calibration", "config"]
+
+  hardware_to_seize:
+    primary_targets:
+      - "BladeRF 2.0 micro xA4 (blue circuit board, ~10cm x 6cm)"
+      - "LimeSDR (green circuit board, ~10cm x 6cm)"
+      - "HackRF One (black circuit board with SMA connectors)"
+      - "Any SDR dongle with SMA connector (not standard USB dongle shape)"
+      - "External power amplifier with SMA connectors"
+      - "Directional antenna (LPDA or panel type)"
+      - "Laptop or mini PC used for SDR operation"
+    secondary_targets:
+      - "Any device matching Harris StingRay form factor (briefcase or vehicle unit)"
+      - "RF test equipment (spectrum analyser)"
+      - "USB-powered RF components"
+
+  specific_config_fingerprint:
+    enb_id: 537942
+    mcc: 505
+    mnc: 1
+    tac: 12385
+    notes: >
+      Finding a configuration file with EXACTLY these values
+      is definitive proof of the specific device used in this
+      investigation. This configuration is unique -- it matches
+      no legitimate Telstra infrastructure and matches all
+      CASTNET observations precisely.

@@ -1,0 +1,71 @@
+# Digital Receiver Technology (DRT) / Boeing Dirtbox — Device Intelligence Profile
+# Source: Wikipedia, Wall Street Journal reporting, Boeing press release 2008,
+#         EFF Street Level Surveillance, US Marshals Service confirmed deployment
+# Last updated: 2026-05-22
+
+metadata:
+  title: "DRT Dirtbox / DRTBox (Boeing/Digital Receiver Technology)"
+  manufacturer: "Digital Receiver Technology Inc. (DRT) — Boeing subsidiary since 2008"
+  device_family:
+    - "Dirtbox (DRT Box)"
+    - "DRTBox (advanced variant)"
+  classification: "Military/Federal law enforcement — airborne IMSI catcher"
+  source_confidence: MEDIUM
+  notes: >
+    DRT was founded 1997 in Germantown, Maryland. Acquired by Boeing in 2008.
+    The Dirtbox is an airborne cell site simulator designed for deployment on
+    small aircraft (Cessna). Used by US Marshals Service since at least 2007.
+    Not typically sold to state/local law enforcement — federal/military only.
+
+capabilities:
+  network_generations: [2G_GSM, 3G_UMTS, 4G_LTE]
+  deployment: AIRBORNE
+  platform: "Cessna aircraft, small surveillance aircraft"
+  simultaneous_targets: 200
+  simultaneous_decrypt: true
+  notes: >
+    DRT documentation states capability to crack encryption on communications
+    from over 200 mobile phones simultaneously across 4G LTE frequencies.
+    Boeing describes it as a hybrid of jamming, managed access, and detection.
+
+behavioral_signatures:
+  primary:
+    - name: "Airborne wide-area sweep"
+      description: >
+        DRTBox sweeps massive areas from aircraft — covering entire city blocks
+        or urban areas in a single pass. Distinct from ground-based IMSI catchers
+        in coverage area (city-wide vs street-level).
+      severity: HIGH
+      detection_note: >
+        Ground-level Rayhunter captures during overflights may show rapid
+        cell ID cycling and signal anomalies as aircraft passes overhead.
+        Signal strength will peak and decline rapidly (Doppler-like pattern).
+
+    - name: "Multi-phone simultaneous processing"
+      description: >
+        Unlike Harris (targeted) or srsRAN (one UE at a time effectively),
+        DRTBox processes 200+ phones simultaneously. Mass collection mode.
+      severity: HIGH
+
+    - name: "Federal-only deployment"
+      description: >
+        DRTBox is restricted to US federal agencies (FBI, US Marshals, DoD, DHS).
+        Australian equivalent would be AFP, ASD, or DSS. NOT state police.
+      severity: INFO
+      relevance_to_au: >
+        AFP referral of the Cranbourne East investigation creates theoretical
+        possibility of DRT-class capability involvement at federal level.
+        This is speculative — document for completeness only.
+
+differentiators:
+  - "Airborne deployment — ground Rayhunter captures may show anomalous signal patterns"
+  - "Mass collection vs Harris targeted — sweeps everyone in area"
+  - "Federal/military only — state police use Harris; federal uses DRT"
+  - "Used since 2007 by US Marshals — well-established operational history"
+
+references:
+  - "Wall Street Journal: US Marshals dirtbox program since 2007"
+  - "Boeing press release: DRT acquisition November 2008"
+  - "EFF Street Level Surveillance database"
+  - "Wikipedia: Dirtbox (cell phone)"
+  - "DRT website: https://drti.com"

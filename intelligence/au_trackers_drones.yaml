@@ -1,0 +1,346 @@
+---
+# Australian RF Signature Library — Personal Trackers & Drones
+# Defensive posture: detecting tracking devices placed on/near your property
+# and CASA-mandated Remote ID broadcasts from drones in your vicinity
+# Version: 1.0 | June 2026
+
+meta:
+  category: trackers_drones
+  jurisdiction: australia_primary
+  last_updated: "2026-06-06"
+  legal_note: >
+    All tracker detection is PASSIVE — no transmission. Detecting BLE
+    advertisements is legally equivalent to seeing a device with your eyes.
+    CASA Remote ID broadcasts are LEGALLY MANDATED — operators are required
+    by law to broadcast them. Passive reception has zero legal ambiguity.
+  sources:
+    - "Apple AirTag technical specification — Apple developer docs"
+    - "Tile BLE specification — public"
+    - "Samsung SmartTag specification — public"
+    - "CASA Remote ID rules CASR Part 101 — effective Jan 2024"
+    - "ASTM F3411-22a Remote ID standard"
+    - "DJI OcuSync 3 technical documentation"
+    - "ACMA 915MHz and 2.4GHz ISM band plans"
+
+signatures:
+
+  # ─── APPLE AIRTAG ──────────────────────────────────────────────────
+
+  - id: apple_airtag_present
+    label: "Apple AirTag — owner present"
+    category: personal_tracker
+    subcategory: airtag
+    confidence_base: 0.90
+    signals:
+      - type: ble
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        advertisement_interval_ms: 2000
+        manufacturer_id: "0x004C"
+        payload_type: apple_nearby_action
+        payload_subtype: "0x12"
+        notes: "Owner nearby — 2s advertisement interval, rotating MAC"
+    mac_type: random_resolvable
+    mac_rotation_interval_min: 15
+    uwb_note: "U1 UWB chip active when owner in proximity — 6.5GHz, not detectable without UWB hardware"
+    alert_level: info
+    display_color: gray
+    sources:
+      - "Apple AirTag technical specification"
+      - "AirGuard app reverse-engineering — public GitHub"
+
+  - id: apple_airtag_separated
+    label: "Apple AirTag — owner NOT present (potential surveillance)"
+    category: personal_tracker
+    subcategory: airtag
+    confidence_base: 0.90
+    signals:
+      - type: ble
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        advertisement_interval_ms: [500, 2000]
+        manufacturer_id: "0x004C"
+        payload_type: apple_nearby_action
+        payload_subtype: "0x12"
+        separation_indicator: true
+        notes: >
+          After 8-24h away from owner, AirTag emits audible chirp and
+          switches to more frequent advertisement. Separation state flag
+          present in payload byte. This state = device is NOT with owner.
+    alert_level: warning
+    display_color: orange
+    action: "Alert — potential tracking device. Check physical surroundings."
+    anti_stalking_note: >
+      iOS 14.5+ alerts iPhone users to unknown AirTags nearby.
+      Android requires AirGuard or similar app. CASTNET can
+      provide this alert function for any Android node.
+    sources:
+      - "Apple AirTag security overview — apple.com/privacy"
+      - "AirGuard (TU Darmstadt) — open source AirTag detector"
+
+  # ─── TILE ──────────────────────────────────────────────────────────
+
+  - id: tile_tracker
+    label: "Tile tracker (any variant)"
+    category: personal_tracker
+    subcategory: tile
+    confidence_base: 0.85
+    signals:
+      - type: ble
+        standard: bluetooth_4_0_plus
+        freq_ghz: 2.4
+        advertisement_interval_ms: 500
+        manufacturer_id: "0x00D7"
+        service_uuid: "0xFEED"
+        notes: "Tile Pro, Slim, Sticker, Mate — all same BLE profile"
+    mac_type: static
+    mac_note: >
+      Tile uses STATIC MAC addresses — unlike AirTag rotating MACs.
+      A Tile seen repeatedly with same MAC is definitively the same device.
+      This makes Tile significantly easier to track and correlate over time.
+    alert_level: info
+    display_color: gray
+    sources:
+      - "Tile BLE specification — public SDK documentation"
+      - "Electronic Frontier Foundation — tracker comparison"
+
+  # ─── SAMSUNG SMARTTAG ──────────────────────────────────────────────
+
+  - id: samsung_smarttag
+    label: "Samsung SmartTag / SmartTag+"
+    category: personal_tracker
+    subcategory: samsung_smarttag
+    confidence_base: 0.85
+    signals:
+      - type: ble
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        advertisement_interval_ms: 1000
+        manufacturer_id: "0x0075"
+        notes: "SmartTag uses Samsung SmartThings Find network"
+      - type: uwb
+        freq_ghz: 6.5
+        notes: "SmartTag+ only — UWB precision finding. Not detectable without UWB hardware."
+    mac_type: random_resolvable
+    sources:
+      - "Samsung SmartTag BLE specification"
+
+  # ─── GENERIC GPS/LTE-M TRACKERS ────────────────────────────────────
+
+  - id: generic_lte_m_tracker
+    label: "Generic LTE-M / NB-IoT GPS tracker"
+    category: personal_tracker
+    subcategory: gps_tracker
+    confidence_base: 0.65
+    signals:
+      - type: lte_m
+        band: B28
+        freq_ul_mhz: 703
+        freq_dl_mhz: 758
+        pattern: periodic_burst
+        typical_interval_s: [10, 30, 60, 300]
+        burst_duration_ms: [50, 200]
+        power_dbm_typical: -20
+        notes: >
+          LTE-M/NB-IoT trackers are MUCH lower power than a phone.
+          Short narrowband burst on B28 at low RSRP = strong indicator.
+          Interval varies by device config — 10s aggressive to 5min economy.
+    hardware_examples:
+      - "Teltonika FMB920 — popular in AU, Telstra IoT SIM"
+      - "Queclink GL300 — common vehicle tracker"
+      - "Cartrack / Teletrac Navman — commercial fleet"
+      - "SPOT Gen4 — satellite hybrid"
+    detection_method: bladerf_b28_passive
+    detection_note: >
+      bladeRF monitoring B28 can detect these bursts. They appear as
+      narrow (~1.4MHz) brief bursts at lower signal strength than phones.
+      Distinguish from phone by: narrower bandwidth, lower power,
+      regular metronomic interval, no associated voice/data session.
+    alert_level: warning
+    alert_condition: "Detected in stationary location repeatedly over multiple sessions"
+    sources:
+      - "Teltonika FMB920 datasheet"
+      - "Queclink GL300MG datasheet"
+      - "Cartrack product documentation"
+
+  - id: cartrack_navman_commercial
+    label: "Cartrack / Teletrac Navman commercial tracker"
+    category: personal_tracker
+    subcategory: commercial_fleet_tracker
+    confidence_base: 0.70
+    signals:
+      - type: lte
+        carrier: telstra_or_optus
+        band: B28
+        pattern: metronomic_burst
+        typical_interval_s: 60
+        notes: "Commercial trackers typically report every 60s when moving"
+      - type: lte
+        carrier: telstra_or_optus
+        band: B28
+        pattern: heartbeat_stationary
+        typical_interval_s: 300
+        notes: "Stationary heartbeat — every 5 min when vehicle stopped"
+    sources:
+      - "Cartrack technical documentation"
+      - "Teletrac Navman Director platform specs"
+
+  # ─── SIM CARD / 2G TRACKERS ────────────────────────────────────────
+
+  - id: legacy_2g_gsm_tracker
+    label: "Legacy 2G GSM tracker (Telstra 2G shutdown aware)"
+    category: personal_tracker
+    subcategory: gsm_tracker
+    confidence_base: 0.55
+    signals:
+      - type: gsm
+        band: B8
+        freq_mhz: 900
+        pattern: periodic_registration
+        notes: >
+          Telstra shut down 2G in 2016, Optus in 2017.
+          Any 2G activity in AU is anomalous — could indicate:
+          1) A very old tracker on roaming SIM
+          2) A foreign device
+          3) A rogue cell forcing 2G downgrade (your investigation context)
+    alert_level: high
+    alert_reason: "2G activity in Australia is anomalous post-2017"
+    sources:
+      - "Telstra 2G shutdown notice 2016"
+      - "ACMA spectrum reallocation 900MHz"
+
+  # ─── DRONES / UAV ──────────────────────────────────────────────────
+
+  - id: drone_remote_id_generic
+    label: "CASA Remote ID broadcast — any compliant drone"
+    category: drone
+    subcategory: remote_id
+    confidence_base: 0.95
+    signals:
+      - type: ble
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        advertisement_interval_ms: 1000
+        payload_type: astm_f3411_22a
+        notes: >
+          LEGALLY MANDATED for all drones >250g in Australia from Jan 2024.
+          Contains: serial number, operator registration, GPS position,
+          altitude, velocity, timestamp. Broadcast continuously during flight.
+      - type: wifi_nan
+        standard: 802.11
+        freq_ghz: [2.4, 5.8]
+        advertisement_interval_ms: 1000
+        notes: "Secondary Remote ID channel — same payload as BLE"
+    legal_note: >
+      CASA CASR Part 101.375 mandates Remote ID broadcast.
+      Passively receiving this broadcast is receiving a legally
+      required public transmission. Zero legal ambiguity.
+    content_extractable:
+      - serial_number
+      - operator_registration_number
+      - gps_latitude
+      - gps_longitude
+      - altitude_m_agl
+      - velocity_ms
+      - timestamp_utc
+    alert_level: info
+    display_color: cyan
+    sources:
+      - "CASA CASR Part 101.375 — Remote ID requirements"
+      - "ASTM F3411-22a Remote ID standard"
+      - "CASA Drone Rules — effective Jan 2024"
+
+  - id: dji_ocusync3_drone
+    label: "DJI drone — OcuSync 3 (Mavic 3, Air 3, Mini 4 series)"
+    category: drone
+    subcategory: dji
+    confidence_base: 0.88
+    signals:
+      - type: ble
+        standard: bluetooth_5
+        freq_ghz: 2.4
+        advertisement_interval_ms: 1000
+        manufacturer_id: "0x2C05"
+        payload_type: astm_f3411_22a
+        notes: "DJI Remote ID — same as generic but DJI manufacturer ID"
+      - type: ocusync3
+        freq_ghz_channels: [2.400, 2.425, 2.450, 2.475, 5.745, 5.785, 5.825, 5.865]
+        pattern: frequency_hopping
+        hop_rate_hz: ~60
+        bandwidth_mhz: 20
+        notes: >
+          OcuSync 3 hops across 2.4GHz and 5.8GHz channels.
+          Detectable with bladeRF as a distinctive hopping signature.
+          Controller TX and aircraft TX both present — bidirectional.
+    range_km_typical: 12
+    models: ["Mavic 3", "Mavic 3 Enterprise", "Air 3", "Mini 4 Pro"]
+    sources:
+      - "DJI OcuSync 3 technical specification"
+      - "DJI Mavic 3 Enterprise product documentation"
+
+  - id: dji_mavic_enterprise_vicpol
+    label: "DJI Mavic Enterprise — likely VicPol / emergency services"
+    category: drone
+    subcategory: dji_govt
+    confidence_base: 0.82
+    composite: true
+    requires_all:
+      - dji_ocusync3_drone
+    context_boosters:
+      - condition: "temporal correlation with emergency services vehicle presence"
+        boost: 0.10
+      - condition: "Remote ID operator_id matches CASA registered govt operator"
+        boost: 0.15
+    notes: >
+      Remote ID payload contains operator registration number.
+      CASA operator register is partially public — can cross-reference.
+      VicPol CASA operator number: not yet confirmed in public docs,
+      but registration is searchable via CASA drone portal.
+    sources:
+      - "VicPol Annual Report 2023 — drone capability"
+      - "CASA Accredited UA Operator register — public"
+
+  - id: unknown_drone_no_remote_id
+    label: "Drone — no Remote ID (non-compliant or <250g)"
+    category: drone
+    subcategory: unknown
+    confidence_base: 0.70
+    signals:
+      - type: wifi_or_ocusync
+        freq_ghz: [2.4, 5.8]
+        pattern: frequency_hopping
+        notes: "Control link present but no Remote ID advertisement"
+    detection_challenge: >
+      Drones under 250g are exempt from Remote ID.
+      Non-compliant operators flying larger drones will also lack Remote ID.
+      Presence of control link without Remote ID = either sub-250g craft
+      or a compliance violation. Flag for investigation.
+    alert_level: flag
+    display_color: orange
+    sources:
+      - "CASA CASR Part 101 — exemptions for sub-250g"
+
+  # ─── FIXED SURVEILLANCE CAMERAS WITH CELLULAR BACKHAUL ─────────────
+
+  - id: flock_safety_lpr_au
+    label: "FLOCK / fixed LPR camera with cellular backhaul"
+    category: infrastructure
+    subcategory: surveillance_camera
+    confidence_base: 0.65
+    signals:
+      - type: lte
+        carrier: telstra_or_optus
+        band: B28
+        pattern: event_burst_low_duty
+        burst_size_kb: [20, 100]
+        notes: "Plate capture triggers upload — similar to mobile ANPR but stationary"
+    notable_absence:
+      - wifi: "Fixed cameras typically fibre or cellular — no local WiFi"
+      - bluetooth: "No BT"
+    detection_note: >
+      Stationary LTE burst source at fixed location = likely fixed camera.
+      Distinguishable from mobile ANPR by consistent GPS coordinates
+      across multiple CASTNET passes.
+    sources:
+      - "FLOCK Safety product documentation"
+      - "Genetec AutoVu fixed camera specifications"

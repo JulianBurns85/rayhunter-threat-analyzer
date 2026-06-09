@@ -1,0 +1,82 @@
+# PKI Electronic Intelligence GmbH — Device Intelligence Profile
+# Source: PKI product documentation (pki-electronic.com), EFF SLS database,
+#         ACM WPES 2019 anatomy paper
+# Last updated: 2026-05-22
+
+metadata:
+  title: "PKI Electronic Intelligence IMSI Catcher Family"
+  manufacturer: "PKI Electronic Intelligence GmbH (Germany)"
+  device_family:
+    - "PKI 1625 Advanced IMSI Catcher (2-channel)"
+    - "PKI 1650 IMSI Catcher"
+    - "PKI 1660"
+    - "PKI 1665"
+    - "PKI 1670 Catcher Detector"
+    - "PKI 1680"
+    - "PKI 1690"
+  classification: "Commercial law enforcement grade — portable/vehicle-based"
+  source_confidence: MEDIUM
+
+product_notes:
+  pki_1625:
+    description: >
+      Flexible portable 2-channel IMSI catcher. Marketed as 'Advanced IMSI Catcher'.
+      Supports A5/1 and A5/2 decryption. Automatically sets ideal parameters.
+      Primary target: law enforcement and intelligence agencies.
+    channels: 2
+    mobility: portable
+    gsm_decrypt: true
+    decrypt_key_range: "2 to 20+ KC"
+
+  pki_1650:
+    description: >
+      Lightweight vehicle-portable IMSI catcher with integral antenna.
+      Supports real-time monitoring and post-deployment evidence logging.
+      Designed for tracking criminal/terrorist mobile users.
+    mobility: vehicle_or_portable
+    logging: true
+    realtime_monitoring: true
+
+capabilities:
+  network_generations: [2G, 3G, 4G_LTE]
+  attack_modes:
+    - IMSI_harvest
+    - IMEI_harvest
+    - location_tracking
+    - A51_A52_decryption
+  band_preference: [B28, B3, B1]
+  notes: >
+    PKI devices are known to prefer Band 28 (700MHz APT) in Australia
+    due to its coverage characteristics. Operation on B28 combined with
+    null-cipher negotiation and identity harvesting is a PKI-consistent pattern.
+
+behavioral_signatures:
+  primary:
+    - name: "Null-cipher + identity harvest combination"
+      description: >
+        PKI devices in intercept mode combine EEA0 null-cipher negotiation
+        with IMSI/IMEI identity harvesting in sequence.
+      spec_ref: "3GPP TS 33.401 §5.1.3.2, TS 24.301 §5.4.4"
+      severity: CRITICAL
+
+    - name: "Band 28 preference in Australian deployment"
+      description: >
+        700MHz (Band 28) provides the coverage characteristics suited
+        to vehicle-based portable deployment. PKI 1650 vehicle deployment
+        consistent with Band 28 primary operation.
+      severity: MEDIUM
+      confidence: LOW
+
+  secondary:
+    - name: "A5/1 decryption capability"
+      description: >
+        PKI 1625 supports GSM A5/1 key cracking. In Australian context
+        where 2G is shut down, presence of GERAN redirect combined with
+        PKI-pattern identity harvest suggests 2G intercept attempt.
+      severity: HIGH
+
+references:
+  - "PKI 1625 product page: https://pki-electronic.com/products/imsi-catcher/advanced-imsi-catcher/"
+  - "PKI 1650 product page: https://pki-electronic.com/products/imsi-catcher/imsi-catcher/"
+  - "EFF Street Level Surveillance database"
+  - "ACM WPES 2019: Anatomy of Commercial IMSI Catchers"

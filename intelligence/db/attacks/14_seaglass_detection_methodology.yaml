@@ -1,0 +1,76 @@
+# SeaGlass — City-Wide IMSI Catcher Detection Methodology
+# Source: Ney, Smith, Cadamuro, Kohno (2017). "SeaGlass: Enabling City-Wide
+#         IMSI-Catcher Detection." Proceedings on Privacy Enhancing Technologies
+#         2017(3):39-56. DOI: 10.1515/popets-2017-0027
+# Authors: Peter Ney, Ian Smith, Gabriel Cadamuro, Tadayoshi Kohno
+#          University of Washington
+# Last updated: 2026-05-22
+
+title: "SeaGlass — City-Wide IMSI Catcher Detection via Cellular Anomaly Modeling"
+authors: "Ney, Smith, Cadamuro, Kohno"
+institution: "University of Washington"
+venue: "Proceedings on Privacy Enhancing Technologies 2017"
+doi: "10.1515/popets-2017-0027"
+year: 2017
+url: "https://seaglass.cs.washington.edu"
+citation_safe: true
+
+methodology: >
+  SeaGlass deploys sensors in vehicles to continuously measure the cellular
+  landscape across a city. By building a statistical model of each cell tower's
+  normal behavior over time, it detects anomalies consistent with IMSI catchers.
+  Deployed in 15 ridesharing vehicles across Seattle and Milwaukee, collecting
+  two months of data per city. Measured 1,400+ distinct cell tower base stations
+  in Seattle alone.
+
+detection_signatures:
+  anomaly_types:
+    - name: "Ephemeral cell towers"
+      description: >
+        Cell towers that appear briefly and disappear. Legitimate towers
+        are permanent infrastructure. IMSI catchers appear and vanish.
+      relevance_to_rta: >
+        RTA's RogueTowerDetector cross-references against OpenCelliD.
+        Cells with zero global observations are ephemeral by definition.
+        Cranbourne East CIDs 8666381, 8666391, 8666411 have zero OpenCelliD
+        observations — confirming ephemeral status.
+
+    - name: "Unusual signal strength patterns"
+      description: >
+        IMSI catchers must transmit at higher power than legitimate towers
+        to attract nearby devices. SeaGlass detects anomalously strong signals
+        from known tower locations.
+      relevance_to_rta: >
+        Add RSRP anomaly detection — unusually strong signal from an unregistered
+        cell is a SeaGlass-class indicator.
+
+    - name: "Configuration inconsistency"
+      description: >
+        Cell towers broadcasting different LAC/TAC, Cell ID, or MCC/MNC than
+        historically observed at that location.
+      relevance_to_rta: >
+        Confirmed anomalous TAC=12385 (Telstra) in Cranbourne East — consistent
+        with SeaGlass configuration inconsistency indicator.
+
+    - name: "Multi-EARFCN operation"
+      description: >
+        Legitimate towers operate on fixed EARFCN. IMSI catchers on SDR
+        hardware may be observed on multiple EARFCNs.
+      relevance_to_rta: >
+        Already implemented in EARFCNAnomalyDetector. Cranbourne East confirmed
+        15 rogue CIDs across TAC 12385 and TAC 30336.
+
+deployment_lessons:
+  crowdsource_advantage: >
+    SeaGlass showed that crowdsourced, distributed measurement dramatically
+    improves detection reliability. A single sensor misses transient IMSI catchers;
+    a network of sensors catches them.
+  application: >
+    Rayhunter dual-unit deployment (Telstra + Vodafone simultaneously) mirrors
+    SeaGlass multi-sensor approach. Cross-carrier confirmation is the equivalent
+    of SeaGlass multi-vehicle corroboration.
+
+references:
+  - "SeaGlass paper: https://techpolicylab.uw.edu/wp-content/uploads/2018/07/SeaGlass-Enabling-City-Wide-IMSI-Catcher-Detection.pdf"
+  - "SeaGlass website: https://seaglass.cs.washington.edu"
+  - "PoPETs 2017: https://petsymposium.org/popets/2017/popets-2017-0027.php"
