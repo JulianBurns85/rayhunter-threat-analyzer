@@ -1,0 +1,517 @@
+========================================================================
+RAYHUNTER THREAT ANALYZER - SHA-256 FORENSIC EVIDENCE MANIFEST
+========================================================================
+Generated (UTC) : 2026-06-09T08:05:41+00:00
+Total files     : 72
+Total size      : 22.3 MB
+Algorithm       : SHA-256 + MD5
+Hash errors     : 0
+========================================================================
+
+SHA256  86ba673e338c255e8d9a6e22ae6946c05c0644d42aa7b61efc585395351fd388
+MD5     55ac66305b49fd6c0f2f938dc997ae62
+  File : 103-1.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\103-1.ndjson
+  Size : 11.0 KB (11,315 bytes)
+  Mod  : 2026-06-05T12:58:42+00:00
+
+SHA256  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+MD5     d41d8cd98f00b204e9800998ecf8427e
+  File : 103-gps.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\103-gps.ndjson
+  Size : 0.0 B (0 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  67937262d2382d04aa33e1d795fde9554eb81b3ab5b59430d1755fc115287669
+MD5     786f3976b89248b9ddb94d3fe39fb45f
+  File : 103.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\103.pcapng
+  Size : 1.5 MB (1,538,152 bytes)
+  Mod  : 2026-06-06T00:17:25.132453+00:00
+
+SHA256  3d1c61ee5bf8833610b9a5077d8be58eebe948e6b52cae37bf252206fdeb76ac
+MD5     2ad3625495d211a1a866f0b9c884c81d
+  File : 103.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\103.qmdl
+  Size : 818.0 KB (837,619 bytes)
+  Mod  : 2026-06-06T00:17:24.178451+00:00
+
+SHA256  a9800c8b58d13bbbf11f03427229345979afe7a813341ecfa92159e76baa08df
+MD5     88bcbd8e79783c20f65ac6a19763f1c5
+  File : 1780505472.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\1780505472.ndjson
+  Size : 5.2 KB (5,373 bytes)
+  Mod  : 2024-12-18T21:50:02+00:00
+
+SHA256  e97ed779c86729bd51b99fbce65a547ced62ab43eb83cdda9acec6dd468f4d49
+MD5     2d02bede5167c9147d210f6c5d757ee9
+  File : 1780505472.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\1780505472.pcapng
+  Size : 916.1 KB (938,040 bytes)
+  Mod  : 2026-06-06T00:17:21.791371+00:00
+
+SHA256  ebc1c360c9a8abcbb385bcfa229529c7ba45924a12d5f7bb27a8f27905297708
+MD5     ed8735cc0d56af815090ffd4b0a1e802
+  File : 1780505472.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\1780505472.qmdl
+  Size : 503.7 KB (515,740 bytes)
+  Mod  : 2026-06-06T00:17:17.159908+00:00
+
+SHA256  cf99b4e69e6e95dbfe8bf22c1c7d974164888f5104d617f278895d3a0d4e141c
+MD5     c0d5e86253fe05e66de87d4ac6087ca5
+  File : 1780591711.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\1780591711.ndjson
+  Size : 1.8 KB (1,823 bytes)
+  Mod  : 2026-06-04T06:48:30+00:00
+
+SHA256  9ff8ba1b535e7c057886945cb4c1bf2bb9403db76ff50156253e67612f002f37
+MD5     3c7db023296741b95a45371790e9888a
+  File : 1780591711.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\1780591711.pcapng
+  Size : 4.3 KB (4,452 bytes)
+  Mod  : 2026-06-06T00:12:13.495639+00:00
+
+SHA256  2d40c7a108ee38de7084e6f75eca2ce6ffcd22b5d1f4b6528fd34663ec341311
+MD5     beeb3ed2a0a9d2b34c5464569cedf7ac
+  File : 1780591711.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\1780591711.qmdl
+  Size : 2.3 KB (2,370 bytes)
+  Mod  : 2026-06-06T00:12:12.087201+00:00
+
+SHA256  badbcc24433537356974c7ce52c7050a127ee6419abd551f29c7074322ad3fdd
+MD5     7b35e03dfd2afbc3f37306d5693e8fc1
+  File : 1780591828.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\1780591828.ndjson
+  Size : 12.7 KB (12,976 bytes)
+  Mod  : 2026-06-05T06:53:44+00:00
+
+SHA256  96ce0c422d0e754efd1733356e908c53806619cbbd12ad4a2cc14c557cee4596
+MD5     085adeaf25d25419949f75629263b4bd
+  File : 1780591828.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\1780591828.pcapng
+  Size : 200.1 KB (204,876 bytes)
+  Mod  : 2026-06-06T00:12:09.186888+00:00
+
+SHA256  14bd527d96133fd9b7def2e11aef647668e70f8b6f89a5b29c7aa74af8c4b597
+MD5     c5be9ac158e9c26f93ac46ebffdbeb87
+  File : 29.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\29.ndjson
+  Size : 66.5 KB (68,066 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  5961dc46a4d1641fb8d1695963dd14853003236cbfb96fa4e52254a4523d14a9
+MD5     98080e3aefbfac2acbb37db05824e0a4
+  File : 29.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\06.06.26\29.pcapng
+  Size : 4.7 MB (4,900,036 bytes)
+  Mod  : 2026-06-06T00:12:07.166229+00:00
+
+SHA256  d9eec004f3ceea2f0c9bd0b458fd8e71187be509cf804c2b02afca0333546393
+MD5     4e7ae957b9c68ffe133ee59a637fa230
+  File : 1780705006.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\07.06.26\1780705006.ndjson
+  Size : 10.1 KB (10,315 bytes)
+  Mod  : 2026-06-06T11:37:54+00:00
+
+SHA256  ed8a2792241fba4c4795165daa8833591dc29e0a1f4034e931dd3e487ac2f912
+MD5     b0178d760b0ebe151a3d3e3c7d60c7a7
+  File : 1780705006.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\07.06.26\1780705006.pcapng
+  Size : 679.3 KB (695,608 bytes)
+  Mod  : 2026-06-06T21:41:17.690936+00:00
+
+SHA256  46f3dc094b6938ddee1bd377ee4f89911752e1609af5e25628840eb25758ca9f
+MD5     1f6f65775d725d17295ed958c2f0dcce
+  File : 1780705006.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\07.06.26\1780705006.qmdl
+  Size : 373.5 KB (382,492 bytes)
+  Mod  : 2026-06-06T21:41:15.460297+00:00
+
+SHA256  b00495fa614f7c2cc31620f678aaa31cc3eb17a1634a9e478ef9dd5356292c6e
+MD5     9999a787b867548f3e78e493429f3f30
+  File : 1780591828.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\07.06.26\2\1780591828.qmdl
+  Size : 111.9 KB (114,557 bytes)
+  Mod  : 2026-06-06T21:43:45.752687+00:00
+
+SHA256  f326e0cdee856ec6d3c58204ee10c0c47deb58f2769c44b6b2b107c6f7317df2
+MD5     6b52513eeb1c88c1bf30ef2ae1735f09
+  File : 29.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\07.06.26\2\29.qmdl
+  Size : 2.6 MB (2,721,126 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  565840cd056502eae8dc526ecf7ea1481dc59e0fd9eaf50deff9a182d4651451
+MD5     e5c0c32322ae9c5a488c20a130c21153
+  File : 103655.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\08.06.26\103655.ndjson
+  Size : 5.6 KB (5,771 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  392fdf4652071a3aec05d3eea94148a563bc6df6943a4d0c9b840801f553c926
+MD5     577f8c998108d3ef7d951be269e5fc74
+  File : 103655.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\08.06.26\103655.pcapng
+  Size : 296.5 KB (303,608 bytes)
+  Mod  : 2026-06-07T13:57:45.037548+00:00
+
+SHA256  084b5c8b49f202678eaf609fcc87aa9eddb239acd13ec01a8f49f8faf22fd99e
+MD5     fcd44f6357ceb2b8283bf3f6209274bd
+  File : 103655.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\08.06.26\103655.qmdl
+  Size : 168.2 KB (172,210 bytes)
+  Mod  : 2026-06-07T13:57:43.616736+00:00
+
+SHA256  6b17785250bd15245e4ed54366ba5b6b4e7aa8eb8bf139046bb7d26e0a9c3675
+MD5     2368713700554a5017b439c00cbaaefa
+  File : 161920.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\08.06.26\161920.pcapng
+  Size : 33.5 KB (34,312 bytes)
+  Mod  : 2026-06-07T13:57:41.564797+00:00
+
+SHA256  34b6ea93813a16d392aed2614587a403c5109519257d1c90ad6fb1f2c8123641
+MD5     862f6c438668273b85511e6fa80a8929
+  File : 161920.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\08.06.26\161920.qmdl
+  Size : 18.5 KB (18,913 bytes)
+  Mod  : 2026-06-07T13:57:42.411973+00:00
+
+SHA256  02ea138b3a32032c236ad0a93e7e7014d6d3ae30842bc11d70615d139e5780d0
+MD5     e53d2bfca9199abb42597a5eb7c14e10
+  File : 1780782047.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\08.06.26\1780782047.ndjson
+  Size : 10.7 KB (10,971 bytes)
+  Mod  : 2026-06-07T03:51:24+00:00
+
+SHA256  bb03ff9540b40c2de8221b915dca1a74312dded8f9ca717813ec813452b35985
+MD5     2f9f8bb7e5ebd3a64f2640e762c808b3
+  File : 1780782047.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\08.06.26\1780782047.pcapng
+  Size : 134.6 KB (137,800 bytes)
+  Mod  : 2026-06-07T13:54:25.378763+00:00
+
+SHA256  49b4cf0ca0922afc4734f488ed8f1a9a86f4e347b249eab5c6d193a3e09d9491
+MD5     86b7641185f7e76b4adfdbe4b58a020a
+  File : 1780782047.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\08.06.26\1780782047.qmdl
+  Size : 76.4 KB (78,279 bytes)
+  Mod  : 2026-06-07T13:54:23.482435+00:00
+
+SHA256  a13b28b423183b6fc22a05e345ed29cc890c0e52abbe7eea26a59cf1b02099fc
+MD5     10d9975d39eae04bc61833809c787974
+  File : 161920.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\161920.qmdl
+  Size : 10.3 KB (10,523 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  65830a320a960a5debc244b51e6dc232001db5e8525ba24b9c1349de91234377
+MD5     3f6d92e71ef64b480a178a8f2e0f0539
+  File : 162800.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\162800.qmdl
+  Size : 101.0 B (101 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  e7a1b0b9d8e6d13d33507578d04d071bcca82a90739abfb31ad23f657b867ade
+MD5     0013ac293a7a563e0455a60896153b1c
+  File : 1780840384.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\1780840384.ndjson
+  Size : 2.7 KB (2,742 bytes)
+  Mod  : 2026-06-07T03:56:34+00:00
+
+SHA256  f8b88d73ad47117ec769af718a8d9c9c4acd9694a34006f952a73c2ef3e05a14
+MD5     68d996abcda866e7f8c35cebd2f7dc68
+  File : 1780840384.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\1780840384.pcapng
+  Size : 16.2 KB (16,564 bytes)
+  Mod  : 2026-06-08T19:19:24.693698+00:00
+
+SHA256  6f79f8374780aa8bc43cc14611e5d623c7dac5e47df2e4e0e3a04166d9daa968
+MD5     6f6ec25f2de8bd784901c16de592532d
+  File : 1780840384.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\1780840384.qmdl
+  Size : 9.0 KB (9,228 bytes)
+  Mod  : 2026-06-08T19:19:23.615859+00:00
+
+SHA256  8e8cf83fa7602d41cfef3a82bbf33064a6ca5c7f1ffa71b8fbbe3630104d1b7e
+MD5     88c35328829d61f4fa62c004d625dc2e
+  File : 1780841309.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\1780841309.ndjson
+  Size : 6.1 KB (6,279 bytes)
+  Mod  : 2026-06-08T09:06:26+00:00
+
+SHA256  3bd55a208bf6197d297ed08227b5eea737d857432d03ce2642f008283ab2bf8e
+MD5     8e3096ed8b75d8bc54831404977d0262
+  File : 1780841309.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\1780841309.pcapng
+  Size : 57.5 KB (58,904 bytes)
+  Mod  : 2026-06-08T19:19:27.611699+00:00
+
+SHA256  e328455e3b8608ece4f5f3531ed8dcafe2bdc8b9ce3964399bf02f12106cf0d0
+MD5     f5f82a12e57c7de76ea16a5bc9fb6057
+  File : 1780841309.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\1780841309.qmdl
+  Size : 32.8 KB (33,613 bytes)
+  Mod  : 2026-06-08T19:19:25.720584+00:00
+
+SHA256  cc5756306b29d4578e0b24f351d58e1f275f674f018fb70aeb05fd976e4aad7d
+MD5     566e929abd13e0ecd48c7327c2e8919c
+  File : 1780945769.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\1780945769.qmdl
+  Size : 25.9 KB (26,529 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  10f86c7dd8f9a7d41a3ee6b01e89e883fd9c47d6bce663454e3a7618cf44add5
+MD5     47b5679cdfb8baec77e0394e93623c80
+  File : 267159.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\267159.ndjson
+  Size : 3.8 KB (3,937 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  dc89123a1a495a7bec38d9d9e565cf52dd7d910241502936e06c03f19d87bef7
+MD5     c8b452efb2cd64fb9222b74cb99e5042
+  File : 267159.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\267159.pcapng
+  Size : 48.6 KB (49,804 bytes)
+  Mod  : 2026-06-08T19:19:33.275829+00:00
+
+SHA256  a68335255d0bb6828fdf34858583b8f94eb234562a972c1d948e0d621bebc0a7
+MD5     c2d361a879cb3510e1f9a53b3b28c012
+  File : 267159.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\267159.qmdl
+  Size : 26.9 KB (27,563 bytes)
+  Mod  : 2026-06-08T19:19:32.009340+00:00
+
+SHA256  f6730da22269a3ad39efe65bda0fa7d6e2f3c9b07125bea39be7d432aab04506
+MD5     be4193b261390123ff33bedd8005e9cf
+  File : 267187.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\267187.ndjson
+  Size : 3.1 KB (3,167 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  73bdcbf826c0837f48934c0bfb695e2049a1d20f6b9ca2ae666ae979a812fb3a
+MD5     e213901c787e3639a26912ea20292c14
+  File : 267187.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\267187.pcapng
+  Size : 9.5 KB (9,740 bytes)
+  Mod  : 2026-06-08T19:10:40.631667+00:00
+
+SHA256  5b312893029cf0e67d239c4f762b9be72bf6572b85374845eeea2d4ece50bf77
+MD5     9444fe9f2725aa168609154dc4c08040
+  File : 267187.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\09.06.26\267187.qmdl
+  Size : 5.4 KB (5,533 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  1e17ca04dfa58587a66a43df9115adceffb6b5e2bd7b47f8a02547f1dd23eff2
+MD5     0f82efe5e3cf209881c587ca324b9931
+  File : 1734589127.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1734589127.pcapng
+  Size : 30.1 KB (30,812 bytes)
+  Mod  : 2026-06-04T16:37:43.182170+00:00
+
+SHA256  a72c375767833a1fab66c07e551324a68485d80883684b4c23ac50dd808e1267
+MD5     aa1ea848d71b401aad6ba22ec874a0b5
+  File : 1734589127.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1734589127.qmdl
+  Size : 16.5 KB (16,907 bytes)
+  Mod  : 2026-06-04T16:37:43.704758+00:00
+
+SHA256  b62aadb440d1112271139d3fdade88cb57f0c12bbf72e9227f77bdbbb42814ae
+MD5     11f9ff464d21e16ca6c06fbf9589858b
+  File : 1734594863.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1734594863.pcapng
+  Size : 278.1 KB (284,788 bytes)
+  Mod  : 2026-06-04T16:37:45.488997+00:00
+
+SHA256  b9626f76114e899af6d99d8c626a09ede2eab0f64027afbf6b36ff096825fdab
+MD5     6a645debeab56dbada4699e334e41805
+  File : 1734594863.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1734594863.qmdl
+  Size : 154.9 KB (158,607 bytes)
+  Mod  : 2026-06-04T16:37:44.961371+00:00
+
+SHA256  06d4d53e798b3884d60fcedfc8a0c860d305d7c0b2efb0dd226f865aeb215832
+MD5     67d3b17e78c3c3c5c41f4f50da988c06
+  File : 1779528132.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1779528132.ndjson
+  Size : 1.9 KB (1,948 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  8f6e46f9896fa5df6686821758f07ed736cc788e002edbb3289aff2e7a3634d4
+MD5     25874dd3ccf289cfc4f11c04c60b4dd2
+  File : 1779528226.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1779528226.ndjson
+  Size : 1.8 KB (1,823 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  2253a228c8e48a0f5651fb55cce4a9ee235a67d6359b4e38255309df19f134e8
+MD5     ca5287ef1f8a4470e25f791077cd8194
+  File : 1779554095.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1779554095.ndjson
+  Size : 3.7 KB (3,745 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  049eddf249bfdc0636c130e2160ddbe843ae3243e6be0a63ada357c0642d39ab
+MD5     957d54f1409950f99635b57c811c8959
+  File : 1779897271 (1).pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1779897271 (1).pcapng
+  Size : 4.9 MB (5,147,688 bytes)
+  Mod  : 2026-06-03T16:48:39.197385+00:00
+
+SHA256  767ab38e95805b1301c4d66932d2959aa1dd3bb60d1c25189e25646352363eee
+MD5     126916cb5e1ed50712cd03122e96ca2a
+  File : 1779897271 (1).qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1779897271 (1).qmdl
+  Size : 2.7 MB (2,859,936 bytes)
+  Mod  : 2026-06-03T16:48:36.956596+00:00
+
+SHA256  5cbb9e553906d2a37181ec41e4d7ecdb2faef353cdb4011709e92df0b0996ef9
+MD5     bd7158c41af2a73d2d732f42dddde623
+  File : 1779897271.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1779897271.ndjson
+  Size : 225.8 KB (231,259 bytes)
+  Mod  : 2026-05-30T05:55:40+00:00
+
+SHA256  d42bb5efeca51d76e0c9a825e27c4f39340f14502b14765cd27111f8f8f4f463
+MD5     604a06af7c8b5d5bb63b992fc5ac4600
+  File : 1780156487.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1780156487.ndjson
+  Size : 1.5 KB (1,530 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  f2e45974b326069fdfaf04284eb16dec46e6e93de1d0d666ec237af79df847f3
+MD5     8759638309ba0d17ce713121a2d219da
+  File : 1780156624.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1780156624.pcapng
+  Size : 7.3 KB (7,520 bytes)
+  Mod  : 2026-06-03T16:48:42.996083+00:00
+
+SHA256  4614ea6500874c692733e41a306a6a2782b1e8e42a72cbf5273b58823cdce1c6
+MD5     5353f3e5948079ee6b25d60ccfe1d893
+  File : 1780156624.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\1780156624.qmdl
+  Size : 3.9 KB (4,028 bytes)
+  Mod  : 2026-06-03T16:48:40.944873+00:00
+
+SHA256  cb311a1e0ec726b95c21265f326d775371b38d50a338bfb2fec2a6748f42053d
+MD5     c1139c81467572689cd42fee7bd58abb
+  File : 628146.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\628146.ndjson
+  Size : 7.1 KB (7,223 bytes)
+  Mod  : 2026-06-03T06:46:44+00:00
+
+SHA256  640728f44a2a49ac1f3924812b205e71218297c8f6f48712e32148497a3e83b2
+MD5     d074d9e5c97a56a0eed64499f051747c
+  File : 628146.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\628146.pcapng
+  Size : 65.8 KB (67,372 bytes)
+  Mod  : 2026-06-03T16:48:44.298809+00:00
+
+SHA256  c029bc6e93603b6946af2747f866e2587241a1345693e1639c6d4197b661035e
+MD5     b2eb3eea9b8712561926d3f8437c0b0e
+  File : 628146.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\1\628146.qmdl
+  Size : 37.5 KB (38,410 bytes)
+  Mod  : 2026-06-03T16:48:45.886872+00:00
+
+SHA256  181a7a02e774c9a6c1ba6ab8d4998375d257ad2f18de98e18d1aac4a2837fdb1
+MD5     7dcd23596549cb8d6ddbbd5a50ebce3c
+  File : 1734589078.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\1734589078.pcapng
+  Size : 1.6 KB (1,592 bytes)
+  Mod  : 2026-06-03T16:51:03.471390+00:00
+
+SHA256  cf03faed5921529224c9d200c4592ef7d78db372259c0fe46fc7c1769e9d68af
+MD5     bc4006624e8b5668803fce7fa7856674
+  File : 1734589078.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\1734589078.qmdl
+  Size : 814.0 B (814 bytes)
+  Mod  : 2026-06-03T16:51:02.531178+00:00
+
+SHA256  736f6714e79a876d46191deb2e0f5d0710dab140ac494c5db3538caf7e72feca
+MD5     38bdb4e8ba8bbea7bd9311f90a60c797
+  File : 1780156624 (1).pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\1780156624 (1).pcapng
+  Size : 7.3 KB (7,520 bytes)
+  Mod  : 2026-06-04T16:41:20.000799+00:00
+
+SHA256  7156c78e0b21515595fff4b04ce23d016e10e7f603d4c664440046d3f49da34f
+MD5     5b59f0f863f10ad71a2e17c63374cd6a
+  File : 1780591195.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\1780591195.pcapng
+  Size : 3.5 KB (3,608 bytes)
+  Mod  : 2026-06-04T16:41:14.452343+00:00
+
+SHA256  d04556a132df0ff9f8c43e140cd4025b93d52277c547fbb97a666d1148f25bf9
+MD5     fc8dbde235cfc2c4039643e58abc8b44
+  File : 1780591195.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\1780591195.qmdl
+  Size : 1.9 KB (1,933 bytes)
+  Mod  : 2026-06-04T16:41:15.385057+00:00
+
+SHA256  918a94ba6d178f74bed52f07b8a8fa65fbcf412028462d5935e06340266ebc1e
+MD5     937ebac02df6148d55184a9939512aa0
+  File : 315525.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\315525.ndjson
+  Size : 1.9 KB (1,948 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  7b1e9d0058a5315d56ee08b286adc420ba467f8d62168f21a61dedb55dc6aeec
+MD5     15cbb738ee361f67ef04fd21228aa518
+  File : 628146 (1).pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\628146 (1).pcapng
+  Size : 65.8 KB (67,372 bytes)
+  Mod  : 2026-06-04T16:41:17.700436+00:00
+
+SHA256  a5c11b6e8b09c2049fb9f4e0f8d7fd0533c626b2154db4f2f5fbea876c96dc54
+MD5     ee82607ab7df86bdd28072f7f525e900
+  File : 628410.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\628410.pcapng
+  Size : 108.5 KB (111,124 bytes)
+  Mod  : 2026-06-03T16:51:01.198072+00:00
+
+SHA256  d38f897e3e197dce55b0d629a466fcdbb5ae0ebdb1d394ddde08de7991e96351
+MD5     b80a8014ddeb2f5bd688090767eec5ea
+  File : 628410.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\628410.qmdl
+  Size : 60.7 KB (62,184 bytes)
+  Mod  : 2026-06-03T16:51:00.691251+00:00
+
+SHA256  8ebadb7105a4c2d2c1fb56400d6b90ede3ea353850c2af4dd55a763388925cff
+MD5     a8cdece70219eaea46f4a54af8248708
+  File : 678214.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\678214.ndjson
+  Size : 2.2 KB (2,231 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  454edb85225cc350137d13d44e539f6083bd9e1b6d331b684efcf5bb5fccbad4
+MD5     e4e9e213e03cb87af624652b81a1a221
+  File : 678214.pcapng
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\678214.pcapng
+  Size : 160.7 KB (164,516 bytes)
+  Mod  : 2026-06-03T16:51:06.372789+00:00
+
+SHA256  f584bf731bf47c006ac5a6e04af6a6872b9ccf3c63eba2f48af49eefe3405930
+MD5     5e81fd18a3a4f98116817b9d6fae8b51
+  File : 678214.qmdl
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\678214.qmdl
+  Size : 94.2 KB (96,436 bytes)
+  Mod  : 2026-06-03T16:51:04.353243+00:00
+
+SHA256  ce3c9514ec0de55f71813718a7beb02ecd53a684aec533427db49210f8075c59
+MD5     dd2e8cd08ea42acbaa1cfc1a23c83d9e
+  File : 909646.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\909646.ndjson
+  Size : 2.1 KB (2,198 bytes)
+  Mod  : 1979-12-31T14:00:00+00:00
+
+SHA256  79db44bf62b0b59dd7683afb69dcee10a0c5ac92fc6c0247da099d4793256e56
+MD5     eaaaed218da4134f68269a6eacd20ffb
+  File : 913299.ndjson
+  Path : C:\Users\Jessum Chap\Desktop\June Ray Files\2\913299.ndjson
+  Size : 5.9 KB (5,998 bytes)
+  Mod  : 2026-05-11T02:17:32+00:00
+
+========================================================================
+END OF MANIFEST
+========================================================================
