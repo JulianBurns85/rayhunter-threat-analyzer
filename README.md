@@ -131,7 +131,7 @@ Repository: `JulianBurns85/CASTNET`
 
 ```powershell
 # Full corpus analysis
-python main.py --dir D:\captures --gps-lat -38.1089 --gps-lon 145.3098 --output output\report.json
+python main.py --dir D:\captures --gps-lat -38.XXXX --gps-lon 145.XXXX --output output\report.json
 
 # With CASTNET observations
 python main.py --dir D:\captures --castnet-obs C:\castnet\obs.json --output output\report.json
