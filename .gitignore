@@ -90,3 +90,5 @@ check_*.py
 
 # Bug reports - sensitive
 C:\RH\BugReports\
+
+webui/
