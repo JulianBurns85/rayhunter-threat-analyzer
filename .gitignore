@@ -72,3 +72,21 @@ desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Reports and maps - move to C:\RH\reports
+rayhunter_report_*.json
+rayhunter_forensic_map_*.kml
+sha256_manifest_*.json
+sha256_manifest_*.txt
+
+# Patch and fix scripts - working files only
+patch_*.py
+fix_*.py
+register_*.py
+check_*.py
+
+# Config with API keys - use config.yaml.example instead
+# config.yaml
+
+# Bug reports - sensitive
+C:\RH\BugReports\
