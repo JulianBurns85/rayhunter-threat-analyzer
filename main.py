@@ -358,6 +358,14 @@ try:
 except ImportError:
     _HAS_OP_PROFILE = False
 
+# -- v4.4 Shannon IMS Log Parser (firmware-layer independent corroboration) ---
+try:
+    from detectors.shannon_ims_parser import ShannonImsParser, DEFAULT_ROGUE_CIDS, DEFAULT_ROGUE_TACS
+    _HAS_SHANNON_IMS = True
+except ImportError:
+    _HAS_SHANNON_IMS = False
+    print("[WARN] detectors/shannon_ims_parser.py not found - Shannon IMS Parser disabled.")
+
 # -- Post-processing ----------------------------------------------------------
 from detectors.heuristic_scorer import HeuristicScorerDetector
 from detectors.cfo_drift_analyser import CFODriftAnalyser
@@ -575,7 +583,7 @@ def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool) -> dict:
     if _HAS_CAMPAIGN:           primary_detectors.append(AttackCampaignSegmenter(cfg))
     if _HAS_CIPHER_NEG:         primary_detectors.append(CipherNegotiationSequenceAnalyser(cfg))
     if _HAS_MULTI_TA:           primary_detectors.append(MultiCarrierTAComparator(cfg))
-    if _HAS_OP_PROFILE:         primary_detectors.append(OperationalProfileSynthesiser(cfg))
+    # OperationalProfileSynthesiser runs AFTER the detector loop (needs all_findings)
     primary_detectors.append(CFODriftAnalyser(cfg))
     primary_detectors.append(BeaconPeriodicityScorerV2(cfg))
     primary_detectors.append(SimultaneousCIDDiscriminator(cfg))
@@ -684,6 +692,10 @@ def main() -> None:
         "--no-fleet", action="store_true",
         help="Disable fleet RF signature detector for this run"
     )
+    ap.add_argument(
+        "--bug-reports", default=None, metavar="DIR",
+        help="Directory containing Android bugreport-*.txt files for Shannon IMS analysis"
+    )
     args = ap.parse_args()
 
     if not args.file and not args.dir:
@@ -710,6 +722,7 @@ def main() -> None:
     print(f"  Auth Absence Detector:       {'enabled' if _HAS_AUTH_ABSENCE else 'MISSING'}")
     print(f"  RRC Reconfig Periodicity:    {'enabled' if _HAS_RRC_RECONFIG else 'MISSING'}")
     print(f"  Measurement Report Rate:     {'enabled' if _HAS_MEAS_RATE else 'MISSING'}")
+    print(f"  Shannon IMS Log Parser:      {'enabled' if _HAS_SHANNON_IMS else 'MISSING'}")
     fleet_status = (
         "DISABLED (--no-fleet)" if args.no_fleet else
         "enabled" if _HAS_FLEET else
@@ -805,6 +818,35 @@ def main() -> None:
             if args.verbose:
                 import traceback
                 traceback.print_exc()
+
+    # -- Shannon IMS Log Parser (firmware-layer independent corroboration) ------
+    if _HAS_SHANNON_IMS:
+        bug_report_dir = getattr(args, "bug_reports", None) or cfg.get("bug_report_dir", None)
+        if bug_report_dir:
+            br_path = Path(bug_report_dir)
+            if br_path.exists():
+                bug_reports = list(br_path.glob("bugreport-*.txt"))
+                if bug_reports:
+                    print()
+                    print("-" * 64)
+                    print("PHASE 2c -- SHANNON IMS BASEBAND LOG ANALYSIS")
+                    print("-" * 64)
+                    raw_cids = cfg.get("detection", {}).get("rogue_tower", {}).get("known_rogue_cids", [])
+                    rogue_cids = {int(c) for c in raw_cids} if raw_cids else DEFAULT_ROGUE_CIDS
+                    for br_file in bug_reports:
+                        try:
+                            shannon = ShannonImsParser(rogue_cids=rogue_cids, rogue_tacs=DEFAULT_ROGUE_TACS)
+                            shannon.parse_file(str(br_file))
+                            finding = shannon.build_finding()
+                            if finding:
+                                results["findings"].append(finding)
+                                print(f"  [SHANNON] {br_file.name}: "
+                                      f"{finding['rogue_event_count']} rogue firmware event(s) "
+                                      f"— CID(s): {finding['unique_rogue_cids']}")
+                            else:
+                                print(f"  [SHANNON] {br_file.name}: no rogue CIDs detected")
+                        except Exception as exc:
+                            print(f"  [WARN] Shannon parser error on {br_file.name}: {exc}")
 
     # -- Heuristics -----------------------------------------------------------
     hr = results.get("heuristics")

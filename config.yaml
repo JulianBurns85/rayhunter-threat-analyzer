@@ -137,3 +137,6 @@ hardware_fingerprint:
   harris_t1_seconds:               610.6
   harris_t1_tolerance_seconds:       5.0
   harris_persistence_threshold_days: 300
+
+bug_report_dir: "C:/RH/BugReports"
+
