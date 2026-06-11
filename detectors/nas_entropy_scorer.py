@@ -105,12 +105,110 @@ class NASEntropyScorer(BaseDetector):
         repeated_trigrams = sum(1 for c in trigram_counts.values() if c > 3)
         trigram_repeat_rate = repeated_trigrams / len(trigram_counts) if trigram_counts else 0
 
+        # ── Single-UE gate ───────────────────────────────────────────────
+        # A Rayhunter capture is ONE phone watching its own serving cell.
+        # By construction it is low-entropy: the dominant message is always
+        # MeasurementReport (connected-mode upkeep), not an identity-harvest
+        # loop. Comparing a single-UE capture against a population baseline
+        # (3.0+ bits assumes many users with diverse traffic) is apples-to-
+        # oranges and produces a guaranteed false positive.
+        #
+        # The entropy threshold is only valid when the capture contains
+        # evidence of MULTIPLE subscribers (≥3 distinct m-TMSIs / GUTIs /
+        # C-RNTIs) AND the low entropy is driven by harvest messages
+        # (IdentityRequest, AuthRequest, AttachReject) rather than normal
+        # connected-mode upkeep (MeasurementReport, RRCReconfiguration).
+        #
+        # If neither condition holds, report the score as INFO so the number
+        # is preserved for the record, but do not assert it as a rogue indicator.
+
+        HARVEST_MESSAGES = {
+            "identityrequest", "authenticationrequest", "attachreject",
+            "taureject", "servicereject", "identityresponse",
+        }
+        UPKEEP_MESSAGES = {
+            "measurementreport", "rrcconnectionreconfiguration",
+            "rrcconnectionreconfigurationcomplete", "ulmeasurementreport",
+        }
+
+        # Count distinct subscriber-like identifiers in the raw events
+        subscriber_ids = set()
+        harvest_count = 0
+        upkeep_count = 0
+        for e in events:
+            raw = str(e.get("msg", "") or "")
+            for marker in ("m-TMSI:", "GUTI:", "C-RNTI:"):
+                if marker in raw:
+                    try:
+                        val = raw.split(marker)[1].split()[0].strip("[](),")
+                        if val:
+                            subscriber_ids.add(val)
+                    except (IndexError, AttributeError):
+                        pass
+        for m in messages:
+            m_clean = m.replace("-", "").replace("_", "").lower()
+            if any(h in m_clean for h in HARVEST_MESSAGES):
+                harvest_count += 1
+            if any(u in m_clean for u in UPKEEP_MESSAGES):
+                upkeep_count += 1
+
+        multi_subscriber = len(subscriber_ids) >= 3
+        harvest_driven   = harvest_count > upkeep_count
+
         # Classification
-        is_rogue     = unigram_entropy < ROGUE_ENTROPY_MAX
-        is_suspicious= unigram_entropy < SUSPICIOUS_MAX
+        is_rogue      = unigram_entropy < ROGUE_ENTROPY_MAX
+        is_suspicious = unigram_entropy < SUSPICIOUS_MAX
 
         if not (is_rogue or is_suspicious):
-            return []  # Entropy looks legitimate
+            return []  # Entropy looks legitimate — nothing to report
+
+        # If single-UE and not harvest-driven: demote to INFO, not an attack
+        if not (multi_subscriber and harvest_driven):
+            # Preserve the score in the record but do NOT assert rogue
+            findings.append(make_finding(
+                detector=self.name,
+                title=(
+                    f"NAS Entropy {unigram_entropy:.3f} bits — INFO "
+                    f"(not a rogue indicator in single-UE capture)"
+                ),
+                description=(
+                    f"Shannon entropy of {total_msgs:,} messages: {unigram_entropy:.4f} bits. "
+                    f"Score is below the {ROGUE_ENTROPY_MAX:.1f}-bit population threshold, "
+                    f"but this is a single-UE capture (Rayhunter phone-side). "
+                    f"Only {len(subscriber_ids)} distinct subscriber identifiers observed "
+                    f"(need ≥3 for population benchmark to apply). "
+                    f"Traffic dominated by {'upkeep' if upkeep_count >= harvest_count else 'mixed'} "
+                    f"messages (harvest={harvest_count}, upkeep={upkeep_count}), "
+                    f"not identity-harvest sequences. "
+                    f"Low entropy here reflects normal single-UE connected-mode behaviour, "
+                    f"NOT an automated surveillance loop. Score retained for record only."
+                ),
+                severity="INFO",
+                confidence="SUSPECTED",
+                technique=(
+                    "Shannon entropy analysis — single-UE capture, population benchmark inapplicable"
+                ),
+                evidence=[
+                    f"Entropy: {unigram_entropy:.4f} bits (population threshold: {ROGUE_ENTROPY_MAX} bits)",
+                    f"Dominant message: {top_msgs[0][0] if top_msgs else '?'} ({dominant_pct:.1f}%)",
+                    f"Top 3 messages: {top3_pct:.1f}% of traffic",
+                    f"Distinct subscriber IDs observed: {len(subscriber_ids)} (need ≥3 for population test)",
+                    f"Harvest messages: {harvest_count} | Upkeep messages: {upkeep_count}",
+                    f"Verdict: single-UE MeasurementReport-dominated capture — entropy threshold inapplicable.",
+                    f"Action: entropy benchmark is valid only on multi-subscriber captures.",
+                ],
+                spec_ref=(
+                    "Shannon (1948); SeaGlass (UW 2017) — population benchmark requires "
+                    "multi-subscriber observation; inapplicable to single-UE phone-side capture."
+                ),
+                action=(
+                    "1. Do NOT cite this entropy score as evidence of a rogue network.\n"
+                    "2. The 3.0-bit population benchmark applies to tower-side multi-user captures.\n"
+                    "3. For a valid entropy test, capture at the eNB side with multiple UEs present.\n"
+                    "4. Score retained in JSON for completeness only."
+                ),
+            ))
+            return findings
 
         severity   = "CRITICAL" if unigram_entropy < 1.5 else "HIGH" if is_rogue else "MEDIUM"
         confidence = "CONFIRMED" if unigram_entropy < 1.5 else "PROBABLE"
