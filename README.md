@@ -1,164 +1,127 @@
-# rayhunter-threat-analyzer
+# Rayhunter Threat Analyzer v1.1
 
-**Cellular surveillance detection and forensic analysis framework.**
+Automated forensic analysis tool for [Rayhunter](https://github.com/EFForg/rayhunter) cellular capture data. Detects IMSI catchers, rogue eNodeBs, null-cipher attacks, and related cellular surveillance techniques.
 
-Analyses Rayhunter output files (NDJSON, QMDL, PCAP) and CASTNET distributed detection data for IMSI catcher activity, rogue base stations, and active man-in-the-middle attacks on LTE networks.
+Built during a real 52-day investigation of suspected IMSI catcher activity in Cranbourne East, Victoria, Australia. The investigation confirmed 55,232 null-cipher violations across two independent mobile networks (Telstra AU and Vodafone AU), using this tool.
 
----
+## What It Detects
 
-## Current Version: 4.1 — Hidden Blade: Assassins Creep
+| Technique | 3GPP Reference | Severity |
+|---|---|---|
+| IMSI Harvesting — Identity Request Flood | TS 24.301 §5.4.4 | CRITICAL |
+| Null-Cipher Attack (EEA0+EIA0) | TS 33.401 §5.1.3.2 | CRITICAL |
+| Forced 2G Downgrade (GERAN Redirect) | TS 36.331 §5.3.12 | CRITICAL |
+| Auth Reject → Identity Request Chain | TS 24.301 §5.4.3.2 | HIGH |
+| Unauthenticated Security Mode Command | TS 33.401 §8.2 | HIGH |
+| Automated Paging Cycle (srsRAN signature) | TS 36.304 §7.1 | HIGH |
+| Multi-EARFCN Anomaly | TS 36.101 | MEDIUM |
+| ProSe/D2D Proximity Tracking | TS 33.303 | MEDIUM |
 
-### 4.1 Changes — Hardware Discrimination Suite
+## Hardware Fingerprinting
 
-Four new detectors added for dual-device identification and hardware attribution:
+The tool identifies likely attacker hardware based on signal patterns:
+- Harris StingRay / HailStorm
+- Septier IMSI Catcher / GUARDIAN
+- Cobham Sentry
+- **srsRAN / OpenAirInterface on SDR** — with specific fingerprints for the 210.2s paging cycle, multi-EARFCN operation, and EEA0+EIA0 default configuration
+- Generic rogue eNodeB
 
-**`CFODriftAnalyser`** — Oscillator class fingerprinting via carrier frequency offset variance. Distinguishes OCXO-disciplined professional hardware (Harris/Septier) from VCTCXO consumer SDR platforms (BladeRF 2.0, LimeSDR) using RSRP stability as a proxy for oscillator quality. References: Ali & Fischer 2019, Zhuang et al. 2018 FBSleuth.
+## Supported File Types
 
-**`BeaconPeriodicityScorerV2`** — Software stack identification via inter-beacon interval analysis. Identifies srsRAN by its canonical 2.10s measurement reporting signature (`measurement_report_period=2000ms` default + OS scheduler jitter ~100ms). This interval is physically impossible from Harris, Septier, or Rohde & Schwarz hardware, which use dedicated FPGA timing (80ms/160ms SIB1 intervals). Stack signature database covers Harris/Septier/R&S, srsRAN, OpenLTE, OsmocomBB, YateBTS.
+- `.ndjson` — Rayhunter v0.10.x output (primary format)
+- `.pcap` / `.pcapng` — GSMTAP captures (from QMDL conversion via SCAT)
+- `.qmdl` / `.bin` — Raw Qualcomm DIAG binary (partial decode; SCAT recommended)
 
-**`SimultaneousCIDDiscriminator`** — Band co-presence analysis proving single-chain SDR operation impossible. Identifies 60-second windows where physically incompatible frequency bands are simultaneously present (Band 28 + Band 7 = 3.71× frequency ratio; Band 28 + Band 1 = 3.0×; Band 28 + Band 3 = 2.43×). Per 3GPP TS 36.104: a single RF chain cannot simultaneously transmit on these band combinations. Co-presence requires either multi-chain professional hardware or two separate devices.
+## Installation
 
-**`HardwareAttributionEngineV2`** — AFP-ready hardware attribution synthesis. Combines oscillator class, beacon periodicity, band co-presence, and behavioral analysis to produce court-ready Device A / Device B identification. Outputs specific configuration fingerprint for forensic match: `enb_id`, `tac`, `mcc`, `mnc` combination unique to each deployment.
-
-**New intelligence:**
-- `intelligence/db/hardware_id_library.yaml` — Complete manufacturer database covering Harris, Septier, Rohde & Schwarz, PKI, Phantom, Comstrac, Datong, Revector, plus consumer SDR platforms (srsRAN/BladeRF, OpenLTE, OsmocomBB, HackRF, LimeSDR, USRP).
-
----
-
-## Key Findings — MAY_2026_CAPTURES (853,810 events)
-
-```
-YAICD Score:        5.00 / threshold 2.6  *** FORMAL POSITIVE DETECTION ***
-Heuristics:         9/10 confirmed, 0 partial
-Platform confidence: 95.0%
-Hypothesis defeater: Active rogue platform 99.99%
-
-Device A: L3Harris Technologies HailStorm II [PROBABLE]
-  - 80ms/160ms SIB1 intervals (FPGA timing — impossible from consumer SDR)
-  - OCXO oscillator class (RSRP std < 3 dBm during business hours)
-  - Multi-band simultaneous (Bands 1+3+7+28) — requires multi-chain hardware
-  - Fixed TA=7 (~547m) maintained >10 days — stationary professional installation
-
-Device B: srsRAN eNB on general-purpose OS [CONFIRMED]
-  - 2.10s inter-event intervals — exact srsRAN measurement_report_period fingerprint
-  - After-hours operation profile
-  - Single-band per session — consistent with single-chain SDR limitation
-  - Post-gap escalation 44.5× confirming personal device resumption
-
-Simultaneous operation: CONFIRMED
-  - 166 band co-presence windows (Band 28 + Band 7/1/3)
-  - Physically impossible from single RF chain
-  - Two transmitters required
-
-Corporate audit effect: ZERO
-  - Device B not on any corporate asset register
-  - Personal search warrant required for Device B seizure
-  - Configuration fingerprint: enb_id=537942, tac=12385, mcc=505, mnc=1
+```bash
+pip install pyshark python-dateutil pyyaml requests scapy
+# Optional for full QMDL decode:
+pip install pySCAT
 ```
 
----
-
-## Forensic Corpus Summary
-
-| Corpus | Events | Campaigns | IMSI Harvests | YAICD |
-|---|---|---|---|---|
-| Forensic Dossier (Dec 2024–Mar 2026) | 10,668,887 | 9 | 365 confirmed | 5.00 |
-| MAY_2026_CAPTURES (Mar–May 2026) | 853,810 | 4 | 41 confirmed | 5.00 |
-| CASTNET live (ongoing) | 4,863+ | — | — | — |
-
-**Total confirmed attacks across full corpus:**
-- Injected handovers: 1,048 (mobilityControlInfo without MeasurementReport)
-- IMSI harvests: 365+ confirmed
-- ProSe proximity tracking: 522 events (real-time location tracking)
-- FlashCatch: confirmed (sub-second IMSI capture, Paci et al. WiSec 2025)
-- Wallet Inspector: confirmed (pre-encryption IMSI extraction, Tucker et al. NDSS 2025 msg #47)
-- Auth Reject → Identity Request chains: confirmed
-
-**Peak intensity:** 2026-03-03 — 768,052 threat score (single day)
-**De-escalation post-regulatory:** 435.9× reduction
-
----
-
-## Detection Capabilities
-
-### 10-Heuristic YAICD Framework
-Based on Dabrowski et al. 2014 / Ziayi et al. 2021:
-- 4.1.1 Off-band EARFCN
-- 4.1.2 Unusual Cell ID
-- 4.1.3 Unusual base station parameters
-- 4.1.4 No forced 2G downgrade
-- 4.1.6 EEA0 null-cipher (active MitM)
-- 4.1.7 Empty/invalid neighbour list
-- 4.1.8 Traffic forwarding
-- 4.1.10 Changing/inconsistent LAC
-
-### Hardware Discrimination (4.1)
-- Oscillator class fingerprinting (OCXO vs VCTCXO vs XO)
-- srsRAN 2.10s beacon periodicity identification
-- Band co-presence physical impossibility analysis
-- Dual-device attribution and configuration fingerprinting
-
-### Behavioral Analysis
-- Operator rhythm profiling (human vs automated)
-- Regulatory event correlation (before/after behavioral comparison)
-- Campaign segmentation with independent scoring
-- Cross-session hardware persistence (jitter DNA)
-- Hardware lifecycle timeline (longitudinal tracking)
-
-### Attack Technique Detection
-- IMSI harvest via Identity Request flood
-- Auth Reject → Identity Request chain (Tucker et al. NDSS 2025 msg #8)
-- Wallet Inspector / pre-SecurityModeCommand extraction (msg #47)
-- FlashCatch sub-second capture (Paci et al. WiSec 2025)
-- LTE ProSe proximity tracking (3GPP TS 36.331 §6.3.6)
-- Forced handover injection
-- CID rotation cluster detection
-- NAS entropy scoring (Shannon 1948 / SeaGlass UW 2017)
-- Tucker Taxonomy IER scoring (53-message exposure taxonomy)
-- C-RNTI repeat targeting and harvest chain detection
-
----
-
-## CASTNET Integration
-
-CASTNET (Cellular Anomaly Surveillance Tracking Network) is the distributed detection component. Flask API on port 5000, communal aggregation on port 5001, live Leaflet.js map dashboard. Rayhunter nodes report detections to the aggregation server; CASTNET data feeds into the analyzer via `--castnet-obs`.
-
-Repository: `JulianBurns85/CASTNET`
-
----
+Requires Python 3.9+. On Windows with Python 3.10+, the tool automatically applies the `WindowsSelectorEventLoopPolicy` fix for pyshark.
 
 ## Usage
 
-```powershell
-# Full corpus analysis
-python main.py --dir D:\captures --gps-lat -38.XXXX --gps-lon 145.XXXX --output output\report.json
+```bash
+# Standard analysis
+python main.py --dir /path/to/rayhunter/output --output report.json
 
-# With CASTNET observations
-python main.py --dir D:\captures --castnet-obs C:\castnet\obs.json --output output\report.json
+# Full forensic run — all features
+python main.py --dir /path/to/captures \
+    --manifest \       # SHA-256 file manifest for chain of custody
+    --timeline \       # Cross-file attack correlation
+    --html \           # Interactive HTML timeline report
+    --export-pcap \    # Clean exhibit PCAP of flagged events only
+    --output report.json
 
-# Split analysis (dual device discriminators on CASTNET DB)
-python split_analysis.py --castnet castnet.db --output split_report.txt
+# Network-isolated runs
+python main.py --dir /captures/telstra --mnc 001 --output telstra.json
+python main.py --dir /captures/vodafone --mnc 003 --output vodafone.json
 
-# Temporal device timeline reconstruction
-python temporal_device_timeline.py --dir D:\captures --castnet castnet.db --output timeline.txt
+# Compare two reports (track changes over time)
+python main.py --compare report_old.json report_new.json
+
+# Watch mode — real-time monitoring
+python main.py --dir /path/to/rayhunter/output --watch --watch-interval 30
 ```
 
----
+## Output Formats
 
-## Legal References
+| Output | Flag | Description |
+|---|---|---|
+| Terminal report | default | Colour-coded findings summary |
+| JSON report | `--output file.json` | Machine-readable full report |
+| HTML report | `--html` | Interactive timeline, filterable findings |
+| SHA-256 manifest | `--manifest` | JSON + CSV file hashes for legal admissibility |
+| Exhibit PCAP | `--export-pcap` | Flagged events only, Wireshark-compatible |
+| Report diff | `--compare` | What changed between two runs |
 
-AFP LEX 4864 | ACMA ENQ-1851DVJH04 | VicPol CIRS-20260331-141 | TIO 2026-03-04898
+## EARFCN Frequency Lookup
 
-Applicable legislation: Radiocommunications Act 1992 (Cth) s.189 · Telecommunications (Interception and Access) Act 1979 (Cth) · Privacy Act 1988 (Cth) · Criminal Code Act 1995 (Cth) Div 477
+The tool automatically converts EARFCN numbers to real frequencies and cross-references against ACMA licensed spectrum bands in Australia. Example:
 
----
+```
+EARFCN 1275 = 1812.5 MHz DL (Band 3) — Licensed — Telstra/Vodafone/Optus 1800 MHz
+EARFCN 3148 = 2659.8 MHz DL (Band 7) — Not in primary AU licensed table
+EARFCN 9410 = 778.0 MHz DL (Band 28) — Licensed — Telstra/Vodafone/Optus 700 MHz APT
+```
 
-## References
+## Configuration
 
-- Dabrowski et al. (2014) — IMSI-Catch Me If You Can
-- Ziayi et al. (2021) — YAICD: Yet Another IMSI Catcher Detector
-- Tucker et al. (2025) — SnoopDog: Exposing IMSI-Catcher Attacks (NDSS 2025)
-- Paci et al. (2025) — FlashCatch (WiSec 2025)
-- Zhuang et al. (2018) — FBSleuth (AsiaCCS 2018)
-- Shannon (1948) — A Mathematical Theory of Communication
-- SeaGlass (UW 2017) — Passive Measurement of IMSI-Catchers
+Edit `config.yaml` to set your MCC/MNC, known Cell IDs, OpenCelliD API key, and legal references. The config comes pre-populated with Australian network codes.
+
+## OpenCelliD Integration
+
+Register for a free API key at [opencellid.org](https://opencellid.org/register) and add it to `config.yaml`. The rogue tower detector will cross-reference captured Cell IDs against the OpenCelliD database — unlisted cells in a licensed band are flagged as potentially rogue.
+
+## Legal Context
+
+This tool was built for defensive security research under Australian law. Rayhunter operates passively — it captures only signals broadcast to your own registered SIM. No active network interference is performed.
+
+Relevant Australian law:
+- Radiocommunications Act 1992 (Cth) s.189 — unlicensed transmitter operation
+- Telecommunications (Interception and Access) Act 1979 (Cth)
+- Privacy Act 1988 (Cth)
+
+## Background
+
+This tool was developed during an independent forensic investigation of suspected cellular surveillance at a residential address in Cranbourne East, Victoria, Australia. The investigation ran from February to April 2026 and produced:
+
+- 1,713,678 cellular events analyzed across 560 capture files
+- 55,232 confirmed null-cipher (EEA0+EIA0) violations across Telstra AU and Vodafone AU
+- 390 IMSI Identity Requests in a 120-second window (195× normal maximum)
+- Automated paging cycle confirmed at 210.2-second intervals (srsRAN default)
+- Evidence submitted to Victoria Police (CIRS-20260331-141), ACMA, and TIO
+
+The raw capture dataset was submitted to the Electronic Frontier Foundation for independent verification.
+
+## Author
+
+Julian Burns — IT/Cybersecurity student, Melbourne, Australia  
+GitHub: [@Julian-Burns85](https://github.com/Julian-Burns85)
+
+## License
+
+MIT License — use freely for defensive security research.
