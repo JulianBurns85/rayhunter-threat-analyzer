@@ -753,6 +753,27 @@ def main() -> None:
     start   = time.time()
     results = run_analysis(files, cfg, args.verbose)
     elapsed = time.time() - start
+    # -- Reconciliation: eNB-aware CID correction + phantom-msg quarantine ----
+    from reconcile import reconcile_findings
+    results["findings"], _recon_log = reconcile_findings(
+        results.get("findings", []),
+        results.get("events", []),
+        baseline_path=cfg.get("intelligence", {}).get(
+            "cell_baseline", "intelligence/db/cell_baseline.json"),
+    )
+    for _line in _recon_log:
+        print(_line)
+
+    # -- Provenance map: label every finding by what it's built on -----------
+    try:
+        from provenance import tag_all, provenance_summary
+        tag_all(results.get("findings", []))
+        for _pl in provenance_summary(results.get("findings", [])):
+            print(_pl)
+    except Exception as _pexc:
+        print(f"  [WARN] provenance error: {_pexc}")
+
+
 
     print()
     print("-" * 64)
@@ -831,20 +852,42 @@ def main() -> None:
                     print("-" * 64)
                     print("PHASE 2c -- SHANNON IMS BASEBAND LOG ANALYSIS")
                     print("-" * 64)
-                    raw_cids = cfg.get("detection", {}).get("rogue_tower", {}).get("known_rogue_cids", [])
-                    rogue_cids = {int(c) for c in raw_cids} if raw_cids else DEFAULT_ROGUE_CIDS
+                    # v2.5 FIX: respect an explicitly-set list, INCLUDING an empty one.
+                    # Previously `if raw_cids` treated an empty list as falsy and fell
+                    # back to DEFAULT_ROGUE_CIDS — so emptying the config silently
+                    # re-armed the hardcoded defaults. An empty list now means "no
+                    # watchlist CIDs", which is correct: the Shannon log membership
+                    # check is NOT a behavioural test and must not invent rogues.
+                    rt_cfg = cfg.get("detection", {}).get("rogue_tower", {})
+                    if "known_rogue_cids" in rt_cfg:
+                        raw_cids = rt_cfg.get("known_rogue_cids") or []
+                        rogue_cids = {int(c) for c in raw_cids}
+                    else:
+                        rogue_cids = DEFAULT_ROGUE_CIDS
                     for br_file in bug_reports:
                         try:
                             shannon = ShannonImsParser(rogue_cids=rogue_cids, rogue_tacs=DEFAULT_ROGUE_TACS)
                             shannon.parse_file(str(br_file))
                             finding = shannon.build_finding()
                             if finding:
+                                # v2.5 FIX: a Shannon-log CID match is MEMBERSHIP, not
+                                # behaviour. The CID appearing in the IMS log is normal
+                                # serving-cell reporting. Tag/downgrade so it cannot
+                                # masquerade as a confirmed attack in the provenance map.
+                                finding["severity"] = "INFO"
+                                finding["confidence"] = "SUSPECTED"
+                                finding["source"] = "watchlist_membership"
+                                finding["title"] = (
+                                    "Watchlist-CID appearance in Shannon IMS log "
+                                    "(membership only — NOT behavioural confirmation)"
+                                )
                                 results["findings"].append(finding)
                                 print(f"  [SHANNON] {br_file.name}: "
-                                      f"{finding['rogue_event_count']} rogue firmware event(s) "
+                                      f"{finding['rogue_event_count']} watchlist-CID "
+                                      f"appearance(s) (membership only, not an attack) "
                                       f"— CID(s): {finding['unique_rogue_cids']}")
                             else:
-                                print(f"  [SHANNON] {br_file.name}: no rogue CIDs detected")
+                                print(f"  [SHANNON] {br_file.name}: no watchlist CIDs present")
                         except Exception as exc:
                             print(f"  [WARN] Shannon parser error on {br_file.name}: {exc}")
 
@@ -903,6 +946,35 @@ def main() -> None:
                     }.get(det["alert_level"], "[  ?  ]")
                     print(f"    {marker} {det['label']} ({det['confidence_pct']})")
             print("=" * 64)
+
+    # -- Corpus guard (schema-aware; GPS-off is NOT treated as a fault) -------
+    try:
+        from corpus_guard import (check_event_count_field, check_geo_provenance,
+                                   check_source_tags, check_provenance)
+        import re as _re
+        _decoded = len(results.get("events", []))
+        _fs = results.get("findings", [])
+        _gblob = json.dumps(report, default=str)
+        _dates = sorted(set(_re.findall(r"\b20\d{2}-\d{2}-\d{2}\b", _gblob)))
+        _issues = []
+        _issues += check_event_count_field(_fs, _decoded)
+        _issues += check_geo_provenance(
+            [(f.get("title", ""), " ".join(f.get("evidence", [])
+              if isinstance(f.get("evidence"), list) else [str(f.get("evidence", ""))]),
+              f.get("source")) for f in _fs])
+        _issues += check_source_tags(_fs)
+        if _dates:
+            _issues += check_provenance(_gblob, _dates[0], _dates[-1], gps_present=True)
+        if _issues:
+            print(f"\n  [GUARD] {len(_issues)} issue(s) - report stamped UNVERIFIED:")
+            for _code, _msg in _issues:
+                print(f"     [{_code}] {_msg}")
+            report["provenance_audit"] = {"status": "UNVERIFIED",
+                                          "issues": [list(i) for i in _issues]}
+        else:
+            report["provenance_audit"] = {"status": "CLEAN", "issues": []}
+    except Exception as _exc:
+        print(f"  [WARN] corpus_guard error: {_exc}")
 
     if args.format in ("json", "both") or args.output:
         json_out = json.dumps(report, indent=2, default=str)

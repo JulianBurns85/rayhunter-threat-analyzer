@@ -1,46 +1,43 @@
 #!/usr/bin/env python3
 """
-CipherNegotiationSequenceAnalyser — Full cipher negotiation profiling.
+CipherNegotiationSequenceAnalyser — cipher negotiation profiling.
 
-Tracks the complete cipher negotiation sequence and fingerprints the
-specific attack mode from how and when EEA0 gets selected.
+v2.5 INTEGRITY CORRECTION (12 Jun 2026)
+=======================================
+The previous PATTERNS list classified the *legitimate* LTE attach sequence
+(ATTACH -> SMC -> SMC_DONE -> ATTACH_OK) as "Harris Transparent Proxy", and
+treated normal attach/release and IMEISV identity requests as IMSI-harvest.
+This produced finding [5] ("EEA0 Rate: 0% — 6 Attack Patterns") on a capture
+set whose every SecurityModeCommand used AES (EEA2/EIA2). A 0% EEA0 rate is
+EXCULPATORY, not an attack.
 
-LEGITIMATE cipher selection:
-  RRCSetup → SecurityModeCmd(EEA1/EEA2) → SecurityModeComplete
-  → data session with encryption
+This version:
+  * Reports a clean, encrypted, completed attach as a HEALTHY baseline (INFO),
+    not an attack.
+  * Only flags GENUINELY anomalous sequences:
+      - EEA0/EIA0 actually selected in an SMC (null cipher/integrity),
+      - an IMSI (not IMEISV) Identity Request *before* security activation,
+      - a network-originated Authentication Reject / Attach Reject harvest.
+  * Splits Authentication Reject (network->UE, can be hostile) from
+    Authentication Failure (UE->network MAC/synch failure, which is the UE
+    *catching* a fake base station — never scored as the network attacking).
+  * Distinguishes IMEISV identity requests (routine) from IMSI requests.
 
-HARRIS HAILSTORM transparent proxy:
-  RRCSetup → SecurityModeCmd(EEA0) → SecurityModeComplete
-  → data session without encryption (MitM intercept enabled)
-
-WALLET INSPECTOR:
-  RRCSetup → [NO SecurityModeCmd] → IdentityRequest → Release
-  → IMSI extracted before any encryption negotiated
-
-FLASHCATCH:
-  RRCSetup → IdentityRequest (<2s) → Release
-  → Sub-second IMSI extraction
-
-Each pattern produces a distinct cipher negotiation fingerprint.
-This module catalogues every negotiation in the corpus and classifies it.
-
-Reference: 3GPP TS 33.401 §8.2 (cipher algorithm selection);
-Harris HailStorm transparent proxy mode documentation.
+Reference: 3GPP TS 33.401 §8.2; TS 24.301 §5.4.x.
 """
 
-from collections import defaultdict, Counter
+from collections import defaultdict
 from datetime import datetime, timezone
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from detectors.base import BaseDetector, make_finding
 
 
-SESSION_GAP_S = 300.0  # expanded from 60s — Auth Reject sequences can be minutes apart
+SESSION_GAP_S = 300.0
 
 MSG_MAP = {
-    # No-space variants (concatenated field names)
     "rrcconnectionsetup":          "RRC_SETUP",
     "rrcconnectionsetupcomplete":  "RRC_SETUP",
     "securitymodecommand":         "SMC",
@@ -52,9 +49,8 @@ MSG_MAP = {
     "attachreject":                "ATTACH_REJECT",
     "rrcconnectionrelease":        "RELEASE",
     "authenticationrequest":       "AUTH",
-    "authenticationreject":        "AUTH_REJECT",
-    "authenticationfailure":       "AUTH_REJECT",
-    # Space variants (human-readable message_type field values)
+    "authenticationreject":        "AUTH_REJECT",     # network -> UE
+    "authenticationfailure":       "AUTH_FAILURE",    # UE -> network (NOT an attack)
     "security mode command":       "SMC",
     "security mode complete":      "SMC_DONE",
     "security mode reject":        "SMC_REJECT",
@@ -66,96 +62,36 @@ MSG_MAP = {
     "rrc connection setup":        "RRC_SETUP",
     "authentication request":      "AUTH",
     "authentication reject":       "AUTH_REJECT",
-    "authentication failure":      "AUTH_REJECT",
+    "authentication failure":      "AUTH_FAILURE",
     "auth reject":                 "AUTH_REJECT",
-    # Threat/alert string variants
-    "imsi_harvest":                "IDENTITY",
-    "imsi_exposure":               "IDENTITY",
-    "auth_reject":                 "AUTH_REJECT",
-    "identity_request":            "IDENTITY",
 }
 
-# Known attack pattern fingerprints
-# NOTE: Parser produces ATTACH (not RRC_SETUP) from NAS Attach Request messages.
-# Patterns updated to use ATTACH as the session start indicator.
-PATTERNS = [
-    {
-        "name": "Harris Transparent Proxy (EEA0 Full Session)",
-        "sequence_contains": ["SMC", "SMC_DONE"],
-        "requires_eea0": True,
-        "severity": "CRITICAL",
-        "confidence": "CONFIRMED",
-    },
-    {
-        "name": "Harris Transparent Proxy (Encrypted MitM — No EEA0)",
-        # Harris in transparent proxy mode uses proper encryption but intercepts
-        # at the network level. Identified by: SMC present, no Auth Reject,
-        # session completes normally but traffic is forwarded through rogue eNB.
-        "sequence_contains": ["ATTACH", "SMC", "SMC_DONE", "ATTACH_OK"],
-        "severity": "HIGH",
-        "confidence": "PROBABLE",
-    },
-    {
-        "name": "Wallet Inspector (Pre-Security IMSI)",
-        # Identity Request before Security Mode Command = IMSI extracted
-        # before encryption negotiated
-        "sequence_contains": ["IDENTITY"],
-        "forbidden_before_identity": ["SMC"],
-        "severity": "CRITICAL",
-        "confidence": "CONFIRMED",
-    },
-    {
-        "name": "FlashCatch (Sub-Second IMSI)",
-        "sequence_contains": ["IDENTITY", "RELEASE"],
-        "max_duration_s": 2.0,
-        "severity": "CRITICAL",
-        "confidence": "CONFIRMED",
-    },
-    {
-        "name": "Auth Reject Harvest",
-        # Auth Reject followed by Identity Request = deliberate forced re-auth
-        # to expose IMSI. This is the most common IMSI catcher pattern.
-        "sequence_contains": ["AUTH_REJECT", "IDENTITY"],
-        "severity": "CRITICAL",
-        "confidence": "CONFIRMED",
-    },
-    {
-        "name": "Forced Re-Attach Cycle",
-        # Multiple Attach sequences in rapid succession = forced re-registration
-        # Used to repeatedly expose temporary identifiers
-        "sequence_contains": ["ATTACH", "RELEASE", "ATTACH"],
-        "severity": "HIGH",
-        "confidence": "PROBABLE",
-    },
-    {
-        "name": "Phantom Session (Attach Without Data)",
-        # Attach completes but no data exchange follows = identity harvest only
-        "sequence_contains": ["ATTACH", "RELEASE"],
-        "forbidden_in": ["ATTACH_OK"],
-        "min_events": 2,
-        "max_events": 8,
-        "severity": "HIGH",
-        "confidence": "PROBABLE",
-    },
-]
+
+def _identity_is_imsi(ev: Dict, raw_msg: str) -> bool:
+    """
+    True only for an IMSI Identity Request. IMEISV/IMEI/GUTI requests are routine
+    and must NOT be scored as identity harvest.
+    """
+    idt = str(ev.get("identity_type") or ev.get("id_type") or "").lower()
+    if "imsi" in idt:
+        return True
+    if any(t in idt for t in ("imeisv", "imei", "guti", "tmsi")):
+        return False
+    # Fall back to raw text only if it explicitly says IMSI and not IMEISV.
+    return ("imsi" in raw_msg) and ("imeisv" not in raw_msg)
 
 
 class CipherNegotiationSequenceAnalyser(BaseDetector):
-    """
-    Profiles cipher negotiation sequences to fingerprint specific
-    Harris attack modes from their distinct protocol signatures.
-    """
 
     name = "CipherNegotiationSequenceAnalyser"
     description = (
-        "Cipher negotiation sequence profiling — attack mode fingerprinting "
-        "from SecurityModeCommand timing and EEA0 selection patterns"
+        "Cipher negotiation profiling — flags genuine null-cipher / "
+        "pre-security IMSI exposure; treats encrypted completed attaches as healthy"
     )
 
     def analyze(self, events: List[Dict]) -> List[Dict]:
-        findings = []
+        findings: List[Dict] = []
 
-        # Extract normalised events with timestamps
         norm_events = []
         for e in events:
             ts  = self._get_ts(e)
@@ -165,171 +101,160 @@ class CipherNegotiationSequenceAnalyser(BaseDetector):
                 if pattern in msg:
                     norm = norm_type
                     break
-            eea0 = (
-                e.get("cipher") == "EEA0" or
-                e.get("encryption") == "none" or
-                "eea0" in msg
-            )
+            # EEA0 is only meaningful when *selected* in an SMC.
+            eea0 = False
+            if norm == "SMC":
+                alg = str(e.get("cipher_alg") or e.get("cipher") or "").lower()
+                eea0 = (alg == "eea0") or (e.get("encryption") == "none")
             if ts and norm:
                 norm_events.append({
-                    "ts":   ts,
-                    "type": norm,
-                    "eea0": eea0,
-                    "raw":  msg,
+                    "ts": ts, "type": norm, "eea0": eea0,
+                    "imsi": (norm == "IDENTITY" and _identity_is_imsi(e, msg)),
+                    "raw": msg,
                 })
 
         if not norm_events:
             return []
-
         norm_events.sort(key=lambda x: x["ts"])
 
-        # Reconstruct sessions
+        # Sessionise
         sessions = []
-        current  = [norm_events[0]]
+        current = [norm_events[0]]
         for ev in norm_events[1:]:
             if ev["ts"] - current[-1]["ts"] <= SESSION_GAP_S:
                 current.append(ev)
             else:
-                sessions.append(current)
-                current = [ev]
+                sessions.append(current); current = [ev]
         sessions.append(current)
 
-        # Match sessions against attack patterns
-        pattern_hits = defaultdict(list)
-        for session in sessions:
-            seq   = [e["type"] for e in session]
-            has_eea0 = any(e["eea0"] for e in session)
-            duration = session[-1]["ts"] - session[0]["ts"] if len(session) > 1 else 0
+        # ── Statistics ────────────────────────────────────────────────
+        smc_events = [e for e in norm_events if e["type"] == "SMC"]
+        eea0_smcs  = [e for e in smc_events if e["eea0"]]
+        eea0_ratio = len(eea0_smcs) / len(smc_events) if smc_events else 0.0
 
-            for pattern in PATTERNS:
-                # Check required sequence elements
-                required = pattern.get("sequence_contains", [])
-                if not all(r in seq for r in required):
-                    continue
+        imsi_pre_security = 0   # IMSI identity request before any SMC in a session
+        auth_reject_harvest = 0 # network AUTH_REJECT -> IDENTITY(IMSI)
+        completed_encrypted = 0 # ATTACH..SMC..SMC_DONE..ATTACH_OK, no EEA0
+        ue_caught_fake = 0      # AUTH_FAILURE present (UE rejected network)
 
-                # Check forbidden before identity
-                forbidden_before = pattern.get("forbidden_before_identity", [])
-                if forbidden_before and "IDENTITY" in seq:
-                    idx_id = seq.index("IDENTITY")
-                    if any(f in seq[:idx_id] for f in forbidden_before):
-                        continue
+        for s in sessions:
+            seq  = [e["type"] for e in s]
+            has_eea0 = any(e["eea0"] for e in s)
+            # completed encrypted attach (healthy)
+            if (("ATTACH" in seq or "RRC_SETUP" in seq)
+                    and "SMC" in seq and "SMC_DONE" in seq
+                    and not has_eea0):
+                completed_encrypted += 1
+            # IMSI before security
+            if "SMC" in seq:
+                idx_smc = seq.index("SMC")
+            else:
+                idx_smc = len(seq)
+            for i, e in enumerate(s):
+                if e["type"] == "IDENTITY" and e["imsi"] and i < idx_smc:
+                    imsi_pre_security += 1
+            # auth-reject harvest (network reject then IMSI identity)
+            if "AUTH_REJECT" in seq:
+                ar_idx = seq.index("AUTH_REJECT")
+                if any(e["type"] == "IDENTITY" and e["imsi"] for e in s[ar_idx:]):
+                    auth_reject_harvest += 1
+            if "AUTH_FAILURE" in seq:
+                ue_caught_fake += 1
 
-                # Check forbidden in session
-                forbidden_in = pattern.get("forbidden_in", [])
-                if any(f in seq for f in forbidden_in):
-                    continue
+        anomalies = len(eea0_smcs) + imsi_pre_security + auth_reject_harvest
 
-                # Check EEA0 requirement
-                if pattern.get("requires_eea0") and not has_eea0:
-                    continue
+        # ── Verdict ───────────────────────────────────────────────────
+        if anomalies == 0:
+            # Nothing hostile. Report the cipher posture honestly.
+            if not smc_events:
+                return []
+            evidence = [
+                f"Sessions reconstructed: {len(sessions)}",
+                f"SecurityModeCommand events: {len(smc_events)}",
+                f"EEA0 (null-cipher) selections: 0 (0%)",
+                f"Completed ENCRYPTED attaches (healthy): {completed_encrypted}",
+                f"IMSI Identity Requests before security: 0",
+                f"Network Authentication-Reject harvests: 0",
+                "",
+                "ASSESSMENT: cipher negotiation is consistent with a legitimate,",
+                "encrypted LTE network. A 0% EEA0 rate is the EXPECTED, healthy",
+                "result and is exculpatory — it is not an attack signature.",
+            ]
+            if ue_caught_fake:
+                evidence.append(
+                    f"NOTE: {ue_caught_fake} Authentication Failure(s) present "
+                    f"(UE->network). These are the UE rejecting the network and would "
+                    f"INDICATE a fake base station if seen — none scored as attacks here."
+                )
+            findings.append(make_finding(
+                detector=self.name,
+                title=f"Cipher Negotiation — CLEAN (EEA0 0%, {completed_encrypted} encrypted attaches)",
+                description=(
+                    f"Across {len(sessions)} reconstructed sessions and "
+                    f"{len(smc_events)} SecurityModeCommand events, EEA0 null-cipher "
+                    f"was selected 0 times and no pre-security IMSI exposure or "
+                    f"network authentication-reject harvest was observed. This cipher "
+                    f"posture is consistent with a legitimate encrypted LTE network."
+                ),
+                severity="INFO",
+                confidence="CONFIRMED",
+                technique="Cipher negotiation posture assessment (exculpatory baseline)",
+                evidence=evidence,
+                hardware_hint="Consistent with legitimate carrier encryption (AES EEA2/EIA2).",
+                action=(
+                    "1. No cipher-based attack indicator. Do NOT cite as an attack.\n"
+                    "2. Retain as the encrypted-baseline reference for this capture set."
+                ),
+                spec_ref="3GPP TS 33.401 §8.2",
+            ))
+            return findings
 
-                # Check duration
-                max_dur = pattern.get("max_duration_s", float("inf"))
-                if duration > max_dur:
-                    continue
-
-                # Check event count
-                if len(session) < pattern.get("min_events", 1):
-                    continue
-                if len(session) > pattern.get("max_events", float("inf")):
-                    continue
-
-                pattern_hits[pattern["name"]].append({
-                    "session":  session,
-                    "sequence": seq,
-                    "duration": duration,
-                    "eea0":     has_eea0,
-                    "ts":       session[0]["ts"],
-                })
-
-        # Overall cipher statistics
-        smc_events      = [e for e in norm_events if e["type"] == "SMC"]
-        eea0_smcs       = [e for e in smc_events if e["eea0"]]
-        eea0_ratio      = len(eea0_smcs) / len(smc_events) if smc_events else 0
-
-        total_hits = sum(len(v) for v in pattern_hits.values())
-        if total_hits == 0 and not smc_events:
-            return []
-
+        # ── Genuine anomalies present ─────────────────────────────────
         evidence = [
             f"Sessions reconstructed: {len(sessions)}",
             f"SecurityModeCommand events: {len(smc_events)}",
             f"EEA0 (null-cipher) selections: {len(eea0_smcs)} ({eea0_ratio:.0%})",
-            f"Attack patterns matched: {total_hits}",
-            f"",
+            f"IMSI Identity Requests before security: {imsi_pre_security}",
+            f"Network Authentication-Reject harvests: {auth_reject_harvest}",
+            "",
         ]
+        if eea0_smcs:
+            evidence.append(f"EEA0 selected in {len(eea0_smcs)} SMC(s) — null encryption.")
+        if imsi_pre_security:
+            evidence.append(f"{imsi_pre_security} IMSI request(s) before security activation.")
+        if auth_reject_harvest:
+            evidence.append(f"{auth_reject_harvest} network Auth-Reject -> IMSI harvest sequence(s).")
 
-        if eea0_ratio > 0.5:
-            evidence.append(
-                f"⚠ EEA0 DOMINANCE: {eea0_ratio:.0%} of cipher negotiations "
-                f"selected null-cipher — consistent with MitM transparent proxy mode."
-            )
-            evidence.append("")
-
-        for pname, hits in sorted(pattern_hits.items(),
-                                   key=lambda x: len(x[1]), reverse=True):
-            pattern_def = next(p for p in PATTERNS if p["name"] == pname)
-            evidence += [
-                f"PATTERN: {pname}",
-                f"  Instances: {len(hits)}",
-                f"  Severity: {pattern_def['severity']} | "
-                f"Confidence: {pattern_def['confidence']}",
-            ]
-            for hit in hits[:3]:
-                ts_str = datetime.fromtimestamp(hit["ts"], tz=timezone.utc).isoformat()
-                evidence.append(
-                    f"  [{ts_str}] Seq: {' → '.join(hit['sequence'])} "
-                    f"({hit['duration']*1000:.0f}ms)"
-                    + (" [EEA0]" if hit["eea0"] else "")
-                )
-            evidence.append("")
-
-        severity   = "CRITICAL" if any(
-            p["severity"] == "CRITICAL" and len(pattern_hits.get(p["name"], [])) > 0
-            for p in PATTERNS
-        ) else "HIGH"
-        confidence = "CONFIRMED" if total_hits >= 3 else "PROBABLE"
+        severity = "CRITICAL" if (eea0_smcs or imsi_pre_security) else "HIGH"
+        confidence = "CONFIRMED" if anomalies >= 3 else "PROBABLE"
 
         findings.append(make_finding(
             detector=self.name,
             title=(
-                f"Cipher Negotiation Profile — EEA0 Rate: {eea0_ratio:.0%} — "
-                f"{total_hits} Attack Pattern(s) — "
-                f"{len(set(pattern_hits.keys()))} Pattern Type(s)"
+                f"Cipher/Identity Anomaly — EEA0 {eea0_ratio:.0%}, "
+                f"{imsi_pre_security} pre-security IMSI, {auth_reject_harvest} reject-harvest"
             ),
             description=(
-                f"Cipher negotiation analysis across {len(sessions)} reconstructed sessions. "
-                f"EEA0 null-cipher selected in {eea0_ratio:.0%} of SecurityModeCommand events. "
-                f"{total_hits} attack pattern sequence(s) matched across "
-                f"{len(set(pattern_hits.keys()))} distinct pattern type(s). "
-                f"Each pattern maps to a specific Harris attack mode documented "
-                f"in Tucker et al. NDSS 2025 and Harris HailStorm operational documentation."
+                f"{anomalies} genuine cipher/identity anomaly indicator(s) across "
+                f"{len(sessions)} sessions: {len(eea0_smcs)} EEA0 SMC selection(s), "
+                f"{imsi_pre_security} pre-security IMSI request(s), "
+                f"{auth_reject_harvest} network auth-reject harvest sequence(s). "
+                f"These are byte-level attack indicators, not inferred from completed "
+                f"encrypted attaches."
             ),
             severity=severity,
             confidence=confidence,
-            technique=(
-                "Cipher negotiation sequence fingerprinting — "
-                "Harris attack mode attribution from SecurityModeCommand timing"
-            ),
+            technique="Cipher/identity anomaly detection (EEA0 selection, pre-security IMSI, reject-harvest)",
             evidence=evidence,
-            hardware_hint=(
-                f"Harris HailStorm transparent proxy mode — EEA0 rate {eea0_ratio:.0%}. "
-                f"Attack patterns consistent with full NAS stack implementation."
-            ),
+            hardware_hint="Active rogue eNodeB capability indicated by null-cipher / pre-security identity exposure.",
             action=(
-                "1. EEA0 rate > 50% proves full-session MitM interception.\n"
-                "2. Each pattern match is an independently evidenced attack sequence.\n"
-                "3. Cite Tucker et al. NDSS 2025 attack mode taxonomy.\n"
-                "4. Include cipher negotiation profile in AFP submission.\n"
-                "5. SecurityModeCommand with EEA0 = deliberate downgrade, not fallback."
+                "1. Decode each flagged SMC/Identity frame in tshark and attach as exhibit.\n"
+                "2. EEA0 selection: confirm cipheringAlgorithm=eea0 in the SecurityModeCommand.\n"
+                "3. Pre-security IMSI: confirm Identity Request type=IMSI before SMC.\n"
+                "4. Correlate timestamps with serving-cell ECI/PCI/EARFCN."
             ),
-            spec_ref=(
-                "3GPP TS 33.401 §8.2 (EEA0 scenarios); "
-                "Tucker et al. NDSS 2025 (attack mode taxonomy); "
-                "Harris HailStorm transparent proxy documentation"
-            ),
+            spec_ref="3GPP TS 33.401 §8.2; TS 24.301 §5.4.x",
         ))
-
         return findings
 
     def _get_ts(self, event: Dict) -> Optional[float]:
@@ -340,8 +265,7 @@ class CipherNegotiationSequenceAnalyser(BaseDetector):
             if isinstance(ts, (int, float)):
                 return float(ts)
             if isinstance(ts, str):
-                ts_clean = ts.replace("Z", "+00:00")
-                dt = datetime.fromisoformat(ts_clean)
+                dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
                 return dt.timestamp()

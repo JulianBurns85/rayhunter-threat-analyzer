@@ -366,28 +366,40 @@ class HeuristicScorerDetector:
             + fuzzy("eea0") + fuzzy("null-cipher") + fuzzy("null cipher")
             + fuzzy("security mode command")
         )
-        ctx["cipher_findings"]     = cipher_f
-        ctx["eea0_findings_exist"] = bool(cipher_f)
+        ctx["cipher_findings"] = cipher_f
 
+        # ── CRITICAL FIX (12 Jun 2026) ────────────────────────────────────────
+        # fuzzy("eea0") matches ANY finding that mentions "EEA0" in its text,
+        # including CipherNegotiationSequenceAnalyser findings that explicitly
+        # report EEA0 rate = 0% (exculpatory). We must only set eea0_findings_exist
+        # when a finding actually confirms EEA0 was *selected* in an SMC — not
+        # just mentioned. Findings with titles containing "0%", "CLEAN", or
+        # "Transparent Proxy" are exculpatory and must be excluded from the EEA0
+        # count. _extract_count on those findings also pulls numbers from IMSI
+        # counts, timestamps etc. — only use the dedicated eea0_count key.
         eea0_n = 0
         for f in cipher_f:
-            for k in ("count", "event_count", "total", "eea0_count",
-                      "cipher_count", "num_events"):
+            title = str(_get(f, "title") or _get(f, "name") or "").lower()
+            # Skip findings that explicitly report a 0% EEA0 rate or clean posture
+            if any(x in title for x in (
+                "eea0 0%", "clean", "transparent proxy",
+                "cipher negotiation — clean", "exculpatory",
+            )):
+                continue
+            # Only read dedicated EEA0 count keys — never free-text extraction,
+            # which confuses IMSI counts / timestamps with EEA0 event counts.
+            for k in ("eea0_count", "null_cipher_count", "eea0_smc_count"):
                 v = _get(f, k)
                 if v:
                     try:
                         n = int(v)
-                        if n <= _MAX_SANE_COUNT:
+                        if 0 < n <= _MAX_SANE_COUNT:
                             eea0_n = max(eea0_n, n)
-                            break
                     except (ValueError, TypeError):
                         pass
-            for k in ("message", "description", "detail", "evidence"):
-                v = _get(f, k)
-                if v:
-                    n = _extract_count(str(v))
-                    eea0_n = max(eea0_n, n)
-        ctx["eea0_count"] = eea0_n
+
+        ctx["eea0_count"]          = eea0_n
+        ctx["eea0_findings_exist"] = eea0_n > 0
 
         # --- Forced 2G downgrade (distinct from EEA0) -----------------------
         ctx["forced_downgrade_findings"] = dedup(
@@ -644,9 +656,14 @@ class HeuristicScorerDetector:
         CONFIRMS in both directions:
           EEA0 present = active MitM null-cipher attack (non-proxy mode)
           EEA0 absent  = transparent proxy mode (Harris RayFish Silent/Covert)
+
+        NOTE: has_eea0 is keyed on eea0_count > 0, NOT eea0_findings_exist.
+        eea0_findings_exist can be True whenever any finding mentions the
+        string "eea0" (including exculpatory 0%-rate findings). eea0_count
+        is only set when dedicated eea0_count keys report actual selections.
         """
-        has_eea0 = ctx["eea0_findings_exist"]
         eea0_n   = ctx["eea0_count"]
+        has_eea0 = eea0_n > 0          # ← was ctx["eea0_findings_exist"]
         span     = ctx["span_days"]
 
         if has_eea0:
@@ -719,8 +736,8 @@ class HeuristicScorerDetector:
 
     def _h8_traffic_forwarding(self, ctx: dict) -> HeuristicResult:
         """4.1.8 -- Traffic forwarding mode."""
-        has_eea0 = ctx["eea0_findings_exist"]
         eea0_n   = ctx["eea0_count"]
+        has_eea0 = eea0_n > 0   # ← consistent with _h6_eea0 fix
 
         if not has_eea0:
             return HeuristicResult(
