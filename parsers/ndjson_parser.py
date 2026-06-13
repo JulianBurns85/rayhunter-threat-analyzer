@@ -308,15 +308,34 @@ class NdjsonParser:
                 analyzer_name = message.lower()
 
             # Map analyzer to threat fields
+            #
+            # PROVENANCE GATE: an IE-presence flag (has_mobility_control,
+            # has_prose, has_geran_redirect) is AUTHORITATIVE only when an
+            # actual Rayhunter analyzer fired (key matched in analyzer_name).
+            # A bare keyword sitting in free-text message content is a HINT,
+            # not a decoded protocol IE -- e.g. the word "handover" in an
+            # "LTE ML1 Handover" log line is not a mobilityControlInfo IE.
+            # Keyword-only flags are still set (for visibility) but tagged in
+            # keyword_derived_flags so downstream detectors can require
+            # decode-corroboration before treating them as confirmed attacks.
             matched = False
             for key, updates in ANALYZER_THREAT_MAP.items():
-                if key in analyzer_name or key in message.lower():
+                matched_via_analyzer = key in analyzer_name
+                matched_via_message  = key in message.lower()
+                if matched_via_analyzer or matched_via_message:
+                    flag_is_keyword_only = (
+                        matched_via_message and not matched_via_analyzer
+                    )
                     for field, val in updates.items():
                         if field == "threat":
                             if val not in ev["threats"]:
                                 ev["threats"].append(val)
                         elif field.startswith("has_"):
                             ev[field] = ev[field] or val
+                            if val and flag_is_keyword_only:
+                                ev.setdefault(
+                                    "keyword_derived_flags", []
+                                ).append(field)
                         elif not ev.get(field):
                             ev[field] = val
                     matched = True
@@ -385,6 +404,14 @@ class NdjsonParser:
         elif "imsi" in all_messages and not ev.get("identity_type"):
             ev["identity_type"] = "IMSI"
         if "geran" in all_messages or "2g" in all_messages:
+            # Free-text scan: "geran"/"2g" in a neighbour list or SIB field
+            # name is not a decoded redirectedCarrierInfo / SIB6-7 IE. Set the
+            # flag for visibility but tag it keyword-derived so the downgrade
+            # detector can require corroboration before confirming an attack.
+            if not ev["has_geran_redirect"]:
+                ev.setdefault("keyword_derived_flags", []).append(
+                    "has_geran_redirect"
+                )
             ev["has_geran_redirect"] = True
 
         # ── skipped_message_reason ─────────────────────────────────────

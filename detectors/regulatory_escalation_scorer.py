@@ -205,11 +205,11 @@ class RegulatoryEscalationScorer(BaseDetector):
             ),
             evidence=evidence,
             hardware_hint=(
-                "Response to ACMA inspection (94% drop) indicates operator "
-                "awareness of investigation — consistent with insider at "
-                "consistent with insider at telco/infrastructure contractor. "
-                "Post-blackout escalation suggests operator believed audit "
-                "cleared them and resumed with increased aggression."
+                "Response to ACMA inspection (94% drop) is consistent with "
+                "operator awareness of investigation — pattern is consistent "
+                "with access to regulatory scheduling information. "
+                "Post-blackout escalation is consistent with operator belief "
+                "that audit had cleared them; resumed with increased aggression."
             ),
             action=(
                 "1. Regulatory-correlated behavioral changes eliminate ALL "
@@ -328,7 +328,7 @@ class RegulatoryEscalationScorer(BaseDetector):
             "   Post-inspection rate:  6% (94% intensity drop)\n"
             "   Window:                48 hours post-inspection\n"
             "   Corpus sessions:       394 analysed\n"
-            "   Interpretation:        Operator KNEW ACMA was on-site.\n"
+            "   Interpretation:        Behavior consistent with operator awareness of ACMA on-site.\n"
             "   Legitimate tower:      Would show ZERO behavioral change.\n"
             "\n"
             "2. OPERATIONAL BLACKOUT (May 30 – June 2, 2026):\n"
@@ -377,9 +377,9 @@ class RegulatoryEscalationScorer(BaseDetector):
             "investigation can constitute consciousness of guilt evidence.\n"
             "\n"
             "The three confirmed responses establish:\n"
-            "  1. Operator KNEW about ACMA investigation (94% drop)\n"
-            "  2. Operator KNEW about corporate audit (76.9h blackout)\n"
-            "  3. Operator BELIEVED audit cleared them (183% escalation)\n"
+            "  1. Operator behavior consistent with awareness of ACMA investigation (94% drop)\n"
+            "  2. Operator behavior consistent with awareness of corporate audit (76.9h blackout)\n"
+            "  3. Operator behavior consistent with belief that audit had cleared them (183% escalation)\n"
             "\n"
             "This pattern is consistent with an insider at a telco/\n"
             "infrastructure contractor who has access to:\n"

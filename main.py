@@ -366,6 +366,13 @@ except ImportError:
     _HAS_SHANNON_IMS = False
     print("[WARN] detectors/shannon_ims_parser.py not found - Shannon IMS Parser disabled.")
 
+# -- v4.4 Cross-Source Correlator (trinity of truth / triple-confirmation) ----
+try:
+    from detectors.cross_source_correlator import run_cross_source_correlation
+    _HAS_CROSS_SOURCE = True
+except ImportError:
+    _HAS_CROSS_SOURCE = False
+
 # -- Post-processing ----------------------------------------------------------
 from detectors.heuristic_scorer import HeuristicScorerDetector
 from detectors.cfo_drift_analyser import CFODriftAnalyser
@@ -723,6 +730,19 @@ def main() -> None:
     print(f"  RRC Reconfig Periodicity:    {'enabled' if _HAS_RRC_RECONFIG else 'MISSING'}")
     print(f"  Measurement Report Rate:     {'enabled' if _HAS_MEAS_RATE else 'MISSING'}")
     print(f"  Shannon IMS Log Parser:      {'enabled' if _HAS_SHANNON_IMS else 'MISSING'}")
+    print(f"  Cross-Source Correlator:     {'enabled' if _HAS_CROSS_SOURCE else 'MISSING'}")
+    # CASTNET live connectivity check (non-blocking)
+    try:
+        from detectors.castnet_live_fetch import fetch_castnet_summary
+        _cs = fetch_castnet_summary(timeout=2)
+        if _cs:
+            _rogue = _cs.get("rogue_detections", "?")
+            _nodes = _cs.get("active_nodes", "?")
+            print(f"  CASTNET Live API:            connected ({_rogue:,} rogue detections, {_nodes} node(s))" if isinstance(_rogue, int) else f"  CASTNET Live API:            connected")
+        else:
+            print(f"  CASTNET Live API:            offline (Pi unreachable — CASTNET source disabled)")
+    except Exception:
+        print(f"  CASTNET Live API:            offline (castnet_live_fetch not found)")
     fleet_status = (
         "DISABLED (--no-fleet)" if args.no_fleet else
         "enabled" if _HAS_FLEET else
@@ -890,6 +910,112 @@ def main() -> None:
                                 print(f"  [SHANNON] {br_file.name}: no watchlist CIDs present")
                         except Exception as exc:
                             print(f"  [WARN] Shannon parser error on {br_file.name}: {exc}")
+
+    # -- Phase 2d: Cross-Source Evidence Corroboration -----------------------
+    # Correlates rogue CID observations across independent evidence classes:
+    #   SOURCE_RF       — Rayhunter passive corpus events
+    #   SOURCE_FIRMWARE — Shannon IMS baseband log (firmware layer)
+    #   SOURCE_CASTNET  — CASTNET federated detection network
+    #
+    # Any CID confirmed by 2+ independent sources emits a corroboration
+    # finding. 3 sources = TRIPLE CONFIRMATION (strongest forensic class).
+    if _HAS_CROSS_SOURCE:
+        # Collect the Shannon finding(s) already appended to results
+        shannon_findings_for_correlator = [
+            f for f in results["findings"]
+            if f.get("detector") == "ShannonImsRogueCellDetector"
+            or "shannon" in str(f.get("id", "")).lower()
+            or "watchlist-cid appearance" in str(f.get("title", "")).lower()
+        ]
+        # -- Live CASTNET fetch -------------------------------------------------
+        # Pull rogue CID detections directly from the Pi API (no manual export)
+        # Tries LAN (192.168.1.239:5000) first, Tailscale (100.68.146.48:5000) second.
+        # Fails silently — analyzer continues without CASTNET if Pi is unreachable.
+        castnet_live_findings = []
+        castnet_live_summary  = None
+        try:
+            from detectors.castnet_live_fetch import (
+                fetch_castnet_detections, fetch_castnet_summary
+            )
+            _castnet_url = getattr(args, "castnet_api", None) or cfg.get("castnet_api_url", None)
+            castnet_live_findings, _castnet_endpoint, _castnet_rogue_count =                 fetch_castnet_detections(castnet_api_url=_castnet_url)
+            if castnet_live_findings:
+                castnet_live_summary = fetch_castnet_summary(castnet_api_url=_castnet_url)
+        except Exception as _e:
+            pass  # CASTNET unavailable — correlator runs with RF + firmware only
+
+        # Merge live CASTNET findings with any manually-passed ones
+        castnet_findings_for_correlator = castnet_live_findings + [
+            f for f in results["findings"]
+            if "castnet" in str(f.get("source", "")).lower()
+            or "castnet" in str(f.get("detector", "")).lower()
+        ]
+
+        # Run the correlator — ingest ALL Shannon findings (one per bug report file)
+        # v4.4 FIX: previously only ingested the first Shannon finding with rogue_events,
+        # missing subsequent Pixel bug reports. Now loops over all findings.
+        from detectors.cross_source_correlator import CrossSourceCorrelator
+
+        _correlator = CrossSourceCorrelator(known_rogue_cids=None)
+        rf_count = _correlator.ingest_rf_events(results.get("events", []))
+        fw_count = 0
+        cn_count = 0
+
+        for _sf in shannon_findings_for_correlator:
+            if _sf.get("rogue_events"):
+                fw_count += _correlator.ingest_shannon_finding(_sf)
+
+        for _cf in castnet_findings_for_correlator:
+            cn_count += _correlator.ingest_castnet_findings([_cf])
+
+        corr_findings = _correlator.correlate()
+
+        if corr_findings:
+            print()
+            print("-" * 64)
+            print("PHASE 2d -- CROSS-SOURCE EVIDENCE CORROBORATION")
+            print("-" * 64)
+            print(f"  RF events ingested:      {rf_count:,}")
+            print(f"  Firmware events:         {fw_count}")
+            print(f"  CASTNET detections:      {cn_count}")
+            print()
+            for cf in corr_findings:
+                corr = cf.get("corroboration", {})
+                level = corr.get("level", "UNKNOWN")
+                cid   = corr.get("cid", "?")
+                n_src = corr.get("n_sources", 0)
+                rf_n  = corr.get("rf_count", 0)
+                fw_n  = corr.get("firmware_count", 0)
+                cn_n  = corr.get("castnet_count", 0)
+
+                # Banner line — make triple confirmation impossible to miss
+                if n_src >= 3:
+                    banner = "🔴 TRIPLE CONFIRMATION"
+                else:
+                    banner = "🟠 DUAL CONFIRMATION  "
+
+                print(f"  [{banner}] CID={cid}")
+                print(f"    {level}")
+                if rf_n:
+                    print(f"    RF corpus:   {rf_n:,} events")
+                if fw_n:
+                    print(f"    Firmware:    {fw_n} Shannon IMS event(s)")
+                if cn_n:
+                    print(f"    CASTNET:     {cn_n} detection(s)")
+                print(f"    → Finding: {cf['severity']} {cf['confidence']}")
+                print()
+
+                # Inject into findings list so it appears in the report
+                results["findings"].append(cf)
+        elif rf_count > 0 or fw_count > 0:
+            # Sources exist but no overlap found — report why
+            print()
+            print("-" * 64)
+            print("PHASE 2d -- CROSS-SOURCE EVIDENCE CORROBORATION")
+            print("-" * 64)
+            print(f"  RF events: {rf_count:,} | Firmware events: {fw_count} | CASTNET: {cn_count}")
+            print("  No rogue CID overlap found across sources in this capture set.")
+            print("  (CIDs must appear in multiple sources to generate a corroboration finding)")
 
     # -- Heuristics -----------------------------------------------------------
     hr = results.get("heuristics")
