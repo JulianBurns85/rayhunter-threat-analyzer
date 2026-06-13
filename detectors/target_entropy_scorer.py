@@ -216,7 +216,11 @@ class TargetEntropyScorer(BaseDetector):
                 title=f"Target Entropy: {classification} ({id_type})",
                 severity=severity,
                 confidence=confidence,
-                summary=summary,
+                description=summary,
+                technique=(
+                    "Shannon entropy of target identifier distribution — "
+                    "targeted hunt vs mass sweep discrimination"
+                ),
                 evidence=evidence,
             ))
 
