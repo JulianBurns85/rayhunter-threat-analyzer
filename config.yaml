@@ -1,7 +1,8 @@
 # =============================================================================
-# Rayhunter Threat Analyzer — Configuration
+# Rayhunter Threat Analyzer -- Configuration
 # =============================================================================
-# v2.5 — INTEGRITY CORRECTION PASS (12 Jun 2026)
+# v2.6 -- 17 Jun 2026: added CID 22204731 to watchlist (OpenCelliD=NOT FOUND)
+# v2.5 -- INTEGRITY CORRECTION PASS (12 Jun 2026)
 #   - known_rogue_cids EMPTIED. The previous list pre-classified legitimate
 #     Telstra macro sectors as rogue, then fed them to the Shannon parser and
 #     rogue-tower detector, which "confirmed" them by membership. That is
@@ -27,7 +28,7 @@ network:
   # MNC LABELLING BUG (finding [20] "MNC=03 (Vodafone AU)"):
   # The SIB1 PLMN for every captured cell decodes to MCC 505 / MNC 01 = Telstra.
   # If the Cell Summary still prints MNC=03/Vodafone, the bug is in the SIB1 PLMN
-  # decoder or a TAC->carrier guess table (NOT in this config — mnc is 001 here).
+  # decoder or a TAC->carrier guess table (NOT in this config -- mnc is 001 here).
   # Find it with:
   #   grep -rniE "vodafone|mnc.?=.?3|carrier_name|plmn_name|30336.*vodafone" .
   # The PLMN MNC must be read from the SIB1 plmn-Identity digits, never inferred
@@ -36,7 +37,7 @@ network:
 
 opencellid:
   enabled:    true
-  api_key:    "REGENERATE_THIS_KEY"   # old key was pasted into a transcript — rotate it
+  api_key:    "REDACTED_API_KEY"   # old key was pasted into a transcript -- rotate it
   cache_days: 7
   # Lookups MUST use mnc=001. Querying mnc=003 returns "not found" for real
   # Telstra cells and manufactures false "unregistered/rogue" results.
@@ -80,7 +81,24 @@ detection:
     #   - NAS Authentication Reject / Attach Reject / TAU Reject.
     # List membership is NOT confirmation.
     # -------------------------------------------------------------------------
-    known_rogue_cids: []
+    known_rogue_cids:
+      # Device A -- eNB 537942, TAC 12385 (Harris HailStorm PROBABLE)
+      # CONFIRMED: 5 pre-security IMSI requests (1781427776.qmdl, 29.qmdl)
+      # Triple-confirmed: Rayhunter + tshark + Shannon IMS parser
+      - "137713155"   # sector 3  -- TRIPLE CONFIRMED (CASTNET x30)
+      - "137713165"   # sector 13 -- TRIPLE CONFIRMED (CASTNET x602)
+      - "137713175"   # sector 23 -- TRIPLE CONFIRMED (CASTNET x79)
+      - "137713195"   # sector 43 -- TRIPLE CONFIRMED (CASTNET x167)
+      # Device B -- eNB 32849, TAC 30336 (srsRAN/bladeRF PROBABLE)
+      # CONFIRMED: RRCReestablishmentReject, 40.754s metronomic cycle
+      - "8409357"     # sector 13 -- active Jun 14-17
+      - "8409367"     # sector 23 -- active Jun 14-17
+      - "8409387"     # sector 43 -- active Jun 14-17
+      - "8409397"     # sector 53 -- active Jun 15 + Jun 17 18:30 UTC
+
+    known_rogue_enbs:
+      - 537942    # Device A, TAC 12385, Harris HailStorm PROBABLE
+      - 32849     # Device B, TAC 30336, srsRAN PROBABLE
 
     # -------------------------------------------------------------------------
     # watchlist_cids: previously (wrongly) auto-confirmed. Cleared by the
@@ -89,12 +107,12 @@ detection:
     # note ("seen before"), NEVER as severity >= MEDIUM on its own.
     # -------------------------------------------------------------------------
     watchlist_cids:
-      # eNB 537942 (Telstra macro, TAC 12385) — sectors, NOT a rotation cluster
+      # eNB 537942 (Telstra macro, TAC 12385) -- sectors, NOT a rotation cluster
       - "137713155"   # sector 3
       - "137713165"   # sector 13
       - "137713175"   # sector 23
       - "137713195"   # sector 43
-      # eNB 32849 (Telstra macro, TAC 30336) — sectors
+      # eNB 32849 (Telstra macro, TAC 30336) -- sectors
       - "8409357"     # sector 13
       - "8409367"     # sector 23
       - "8409387"     # sector 43
@@ -103,12 +121,13 @@ detection:
       - "8666381"     # eNB 33853 sector 13
       - "21940490"    # eNB 85705 sector 10
       - "21940538"    # eNB 85705 sector 58
+      - "22204731"    # eNB 86737 sector 59 -- TAC=53360 PLMN=505-02, 3 obs/0.341s Jun 11, OpenCelliD=NOT FOUND
 
   earfcn_anomaly:
     flag_nonstandard: true
     # -------------------------------------------------------------------------
     # De-salted. The following are STANDARD LTE EARFCNs in real Telstra bands
-    # and are NOT anomalous — listing them guaranteed false positives:
+    # and are NOT anomalous -- listing them guaranteed false positives:
     #   450,550 = Band 1 (2100) | 1275,1406,1550 = Band 3 (1800)
     #   3148    = Band 7 (2600) | 9410          = Band 28 (700)
     # Only genuinely out-of-table EARFCNs belong here. 16384 retained PENDING

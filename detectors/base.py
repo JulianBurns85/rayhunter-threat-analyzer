@@ -34,6 +34,7 @@ def make_finding(
     action: str = None,
     cve: str = None,
     spec_ref: str = None,
+    data_source: str = None,
 ) -> Dict:
     """Construct a standardised threat finding dict."""
     return {
@@ -50,6 +51,7 @@ def make_finding(
         "hardware_hint": hardware_hint,
         "recommended_action": action,
         "spec_reference": spec_ref,
+        "data_source": data_source or "capture",
         "found_at": datetime.utcnow().isoformat(),
     }
 

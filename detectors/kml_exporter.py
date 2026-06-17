@@ -121,6 +121,7 @@ class KMLExporter(BaseDetector):
 
         findings.append(make_finding(
             detector=self.name,
+            data_source="known_location",
             title=f"Forensic Map Exported — {fname if kml_saved else 'WRITE ERROR'}",
             description=(
                 f"KML forensic map generated with {len(CONFIRMED_ROGUE_LOCATIONS)} confirmed "

@@ -276,6 +276,7 @@ class SimultaneousCIDDiscriminator(BaseDetector):
 
         findings.append(make_finding(
             detector=self.name,
+            data_source="castnet",
             title=(
                 f"SIMULTANEOUS CID CO-PRESENCE -- "
                 f"{'BAND INCOMPATIBILITY PROVEN' if n_band_incompatible > 0 else 'INDEPENDENT RSRP CONFIRMED'} "
