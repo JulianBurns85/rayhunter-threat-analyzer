@@ -1117,8 +1117,7 @@ def main() -> None:
             "regulatoryeventcorrelator",
             "attackintensityscorer",
             "crosssessionpersistencetracker",
-            "kmlexporter",
-            "silentperioddetector",
+                        "silentperioddetector",
             "tuckertaxonomyscorer",
             "temporalfingerprintevolutiontracker",
             "attackcampaignsegmenter",
@@ -1134,7 +1133,7 @@ def main() -> None:
         # --- AUTO-TAG KML findings as known_location ---
         for _f in _fs:
             _dn = str(_f.get("detector", "")).lower().replace(" ", "").replace("_", "")
-            if _dn == "kmlexporter" and not _f.get("source"):
+            if _dn == "kmlexporter":
                 tag_source(_f, "known_location")
         _issues += check_source_tags(_fs)
         if _dates:
