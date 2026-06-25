@@ -70,7 +70,16 @@ python main.py --dir captures/ --bug-reports /path/to/BugReports/
 - First-run onboarding wizard
 - Built on the same detection logic as this tool
 
-Canary closes the loop: rayhunter-threat-analyzer analyses captures in depth after the fact; Canary alerts you while it's happening.
+Canary
+
+### [Argus-DB](https://github.com/kevwillow/argus-db) (kevwillow)
+Provenance-tracked database of 43,000+ wireless identifiers for surveillance equipment —
+IMSI catchers, ALPR cameras, drone Remote ID, body cams, gunshot detectors, trackers.
+Sourced from IEEE OUI, FCC EAS, court filings (CourtListener RECAP), and procurement records.
+Confidence-scored on every row. Feeds rayhunter-threat-analyzer as a 4th corroboration source
+for hardware attribution. **Dataset:** ODbL-1.0 | **Docs:** CC-BY-SA-4.0 | **Pipeline:** AGPL-3.0
+
+ closes the loop: rayhunter-threat-analyzer analyses captures in depth after the fact; Canary alerts you while it's happening.
 
 → [github.com/JulianBurns85/canary](https://github.com/JulianBurns85/canary)
 
@@ -270,6 +279,22 @@ The tool is tested against captures from the following hardware:
 ---
 
 ## Releases
+
+### v4.4.0 — Argus-DB Integration (2026-06-26)
+- **Argus-DB cross-reference detector** — `detectors/argus_db_correlator.py`
+  Cross-references hardware attribution findings against [kevwillow/argus-db](https://github.com/kevwillow/argus-db),
+  a provenance-tracked database of 43,000+ surveillance equipment identifiers sourced from
+  IEEE OUI allocations, FCC grantee records, court filings, and procurement data (ODbL-1.0).
+- **Standalone lookup module** — `argus_db_lookup.py`
+  Shared utility for SENTRY and the analyzer. Fetches and caches the argus-db CSV export,
+  provides `lookup_vendor()`, `lookup_mac()`, and `sentry_alert_enrich()` for pipeline integration.
+- **4th independent corroboration source** — L3Harris (conf=97%), Rohde & Schwarz (conf=95%),
+  Septier (conf=90%) all confirmed in argus-db `network_surveillance` category (936 rows),
+  independently of RF corpus, Shannon IMS logs, and CASTNET.
+- **GUARD CLEAN** — argus-db finding correctly auto-tagged as `[HISTORICAL]` provenance.
+- **Credit:** [kevwillow/argus-db](https://github.com/kevwillow/argus-db) — dataset licensed
+  ODbL-1.0 (data) / CC-BY-SA-4.0 (docs) / AGPL-3.0 (pipeline). Argus-DB explicitly targets
+  Rayhunter as a downstream consumer. Integration follows ODbL attribution requirements.
 
 ### v4.3.1 — Integrity corrections, false positive removal, performance
 - Confirmed eNB 32849 as legitimate Vodafone macro — removed from all rogue lists
