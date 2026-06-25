@@ -380,6 +380,15 @@ from detectors.beacon_periodicity_scorer_v2 import BeaconPeriodicityScorerV2
 from detectors.simultaneous_cid_discriminator import SimultaneousCIDDiscriminator
 from detectors.hardware_attribution_engine_v2 import HardwareAttributionEngineV2
 
+# -- v4.4 detectors (Argus-DB cross-reference) --------------------------------
+try:
+    from detectors.argus_db_correlator import ArgusDbCorrelator
+    _ARGUS_DB_ENABLED = True
+except ImportError:
+    ArgusDbCorrelator = None
+    _ARGUS_DB_ENABLED = False
+    print('[WARN] detectors/argus_db_correlator.py not found - Argus-DB Correlator disabled.')
+
 # -- Intelligence / reporting -------------------------------------------------
 from intelligence.hardware_fingerprint import HardwareFingerprinter
 from rf_signature_lookup import rf_lib
@@ -661,6 +670,22 @@ def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool, max_work
     try:
         hscorer = HeuristicScorerDetector(cfg)
         heuristic_result = hscorer.analyze(all_events, all_findings)
+
+        # -- Argus-DB cross-reference (post-processing -- needs full findings) --
+        if _ARGUS_DB_ENABLED:
+            try:
+                _argus_input = {'findings': [
+                    {'title': getattr(f, 'title', ''),
+                     'description': getattr(f, 'description', ''),
+                     'hardware': getattr(f, 'hardware', '')}
+                    for f in all_findings
+                ], 'hardware_candidates': getattr(cfg, 'hardware_candidates', [])}
+                _argus_findings = ArgusDbCorrelator().analyze(all_events, cfg, _argus_input)
+                if _argus_findings:
+                    all_findings.extend(_argus_findings)
+                    print(f'  -> {len(_argus_findings)} finding(s): ArgusDbCorrelator')
+            except Exception as _e:
+                print(f'  [WARN] ArgusDbCorrelator: {_e}')
         print(f"  [HEURISTIC] {heuristic_result.summary}")
         if verbose:
             for h in heuristic_result.heuristics:
@@ -1143,6 +1168,7 @@ def main() -> None:
             "attackcampaignsegmenter",
             "simultaneousciddiscriminator",   # SimultaneousCIDDiscriminator
             "crosssourcecorrelator",
+            "argusdbcorrelator",       # Argus-DB external registry
         }
         for _f in _fs:
             _dn = (str(_f.get("detector", ""))
