@@ -86,7 +86,7 @@ I thought this was worth flagging to you directly given the Atlas of Surveillanc
 Best regards,
 Julian Burns
 Victoria, Australia
-itsalive85@live.com
+[email on request]
 GitHub: JulianBurns85
 
 ---
@@ -131,5 +131,5 @@ Repository: github.com/JulianBurns85/rayhunter-threat-analyzer
 Best regards,
 Julian Burns
 Victoria, Australia
-itsalive85@live.com
+[email on request]
 GitHub: JulianBurns85
