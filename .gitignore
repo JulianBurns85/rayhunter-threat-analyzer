@@ -92,3 +92,10 @@ check_*.py
 C:\RH\BugReports\
 
 webui/
+
+# Generated reports — never commit
+rayhunter_report_*.json
+rayhunter_report_*.json.sha256.seal
+*.seal
+rayhunter_forensic_map_*.kml
+
