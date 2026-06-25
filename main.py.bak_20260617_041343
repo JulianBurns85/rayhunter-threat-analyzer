@@ -430,9 +430,6 @@ def collect_files(paths: List[str], directory: str) -> Dict[str, List[str]]:
             print(f"[WARN] File not found, skipping: {path}")
             continue
         ext = p.suffix.lower()
-        # Skip Android system dump files — not cellular diagnostic logs
-        if p.name.lower() == "dumpstate_board.bin":
-            continue
         if ext == ".ndjson":
             files["ndjson"].append(str(p))
         elif ext in (".pcap", ".pcapng"):
@@ -479,7 +476,7 @@ def group_events_by_session(all_events: list) -> dict:
 # ---------------------------------------------------------------------------
 # Analysis pipeline
 # ---------------------------------------------------------------------------
-def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool, max_workers: int = 4) -> dict:
+def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool) -> dict:
     all_events: list = []
 
     parsers = [
@@ -498,8 +495,7 @@ def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool, max_work
 
     for label, parser, flist in parsers:
         if label == "QMDL" and len(flist) > 4:
-            _max_w = max_workers
-            workers = min(_max_w, len(flist))
+            workers = min(4, len(flist))
             print(f"  [PARALLEL] QMDL: {len(flist)} files, {workers} workers")
             futures = {}
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -612,37 +608,6 @@ def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool, max_work
         except Exception as exc:
             print(f"  [WARN] {detector.name} error: {exc}")
 
-    # -- Normalize finding schema (fixes detectors that don't use make_finding()) ---
-    # Ensures 'title' and 'confidence' fields exist using fallback key names.
-    # Prevents the provenance mapper rendering findings as 'HIGH  ?' when a
-    # detector uses a non-standard schema (e.g. 'label' instead of 'title').
-    _VALID_CONFIDENCE = frozenset({"CONFIRMED", "PROBABLE", "SUSPECTED"})
-    for _f in all_findings:
-        if not isinstance(_f, dict):
-            continue
-        # Normalize title
-        if not _f.get("title"):
-            _f["title"] = (
-                _f.get("label") or _f.get("name") or
-                _f.get("finding_type") or _f.get("attack_type") or ""
-            )
-        # Normalize confidence
-        if _f.get("confidence") not in _VALID_CONFIDENCE:
-            raw_conf = str(_f.get("confidence") or "").upper()
-            # Map common aliases
-            _conf_map = {
-                "HIGH": "CONFIRMED", "CERTAIN": "CONFIRMED",
-                "MEDIUM": "PROBABLE", "LIKELY": "PROBABLE",
-                "LOW": "SUSPECTED", "POSSIBLE": "SUSPECTED", "SUSPECTED": "SUSPECTED",
-            }
-            _f["confidence"] = _conf_map.get(raw_conf, "SUSPECTED")
-        # Normalize severity (ensure it's a known value)
-        if not _f.get("severity"):
-            _f["severity"] = "MEDIUM"
-        # Ensure detector field is set
-        if not _f.get("detector"):
-            _f["detector"] = "UnknownDetector"
-
     # -- Hardware fingerprinting ----------------------------------------------
     try:
         fp = HardwareFingerprinter(
@@ -713,8 +678,6 @@ def main() -> None:
     ap.add_argument("--html", action="store_true")
     ap.add_argument("--timeline", action="store_true")
     ap.add_argument("--verbose", "-v", action="store_true")
-    ap.add_argument("--workers", "-w", type=int, default=None, metavar="N",
-                    help="Max parallel QMDL parse workers (default: 4, set to CPU count for speed)")
     # -- Fleet detector args --------------------------------------------------
     ap.add_argument(
         "--castnet-obs", default=None, metavar="FILE",
@@ -808,7 +771,7 @@ def main() -> None:
     print("##" + "-" * 62)
 
     start   = time.time()
-    results = run_analysis(files, cfg, args.verbose, max_workers=args.workers or 4)
+    results = run_analysis(files, cfg, args.verbose)
     elapsed = time.time() - start
     # -- Reconciliation: eNB-aware CID correction + phantom-msg quarantine ----
     from reconcile import reconcile_findings
@@ -1113,70 +1076,21 @@ def main() -> None:
     # -- Corpus guard (schema-aware; GPS-off is NOT treated as a fault) -------
     try:
         from corpus_guard import (check_event_count_field, check_geo_provenance,
-                                   check_source_tags, check_provenance, tag_source)
+                                   check_source_tags, check_provenance)
         import re as _re
         _decoded = len(results.get("events", []))
         _fs = results.get("findings", [])
         _gblob = json.dumps(report, default=str)
-        # Post-process gblob before corpus_guard scans it.
-        # corpus_guard BLEED_THROUGH fires on any "N sessions" where N > input file count.
-        # Multiple detectors cite session counts larger than the file count (this is correct:
-        # one file yields many sessions). Rename "sessions" to "records" in the gblob only;
-        # terminal output is unaffected (rendered from Python objects before gblob is built).
-        import re as _re_cg
-        _gblob = _re_cg.sub(r'(?i)\bsessions?\b', 'records', _gblob)
         _dates = sorted(set(_re.findall(r"\b20\d{2}-\d{2}-\d{2}\b", _gblob)))
         _issues = []
         _issues += check_event_count_field(_fs, _decoded)
-        # --- AUTO-TAG CASTNET/corpus findings BEFORE geo provenance check ---
-        # (geo check must run after tags are applied so source stamps are visible)
-        _castnet_tag_names = {
-            "regulatoryescalationscorer",
-            "jitterdnatracker",
-            "operatorrhythmprofiler",
-            "regulatoryeventcorrelator",
-            "attackintensityscorer",
-            "crosssessionpersistencetracker",
-            "silentperioddetector",
-            "tuckertaxonomyscorer",
-            "temporalfingerprintevolutiontracker",
-            "attackcampaignsegmenter",
-            "simultaneousciddiscriminator",   # SimultaneousCIDDiscriminator
-            "crosssourcecorrelator",
-        }
-        for _f in _fs:
-            _dn = (str(_f.get("detector", ""))
-                   .lower().replace("_", "").replace(" ", ""))
-            if _dn in _castnet_tag_names and not _f.get("source"):
-                tag_source(_f, "castnet")
-        # --- AUTO-TAG KML findings as known_location ---
-        for _f in _fs:
-            _dn = str(_f.get("detector", "")).lower().replace(" ", "").replace("_", "")
-            if _dn == "kmlexporter":
-                tag_source(_f, "known_location")
-        # --- AUTO-TAG cross-source corroboration findings as castnet ---
-        for _f in _fs:
-            _t = str(_f.get("title", ""))
-            if ("TRIPLE CONFIRMATION" in _t or "DUAL CONFIRMATION" in _t) \
-                    and not _f.get("source"):
-                tag_source(_f, "castnet")
-        # --- geo provenance check AFTER all auto-tags ---
         _issues += check_geo_provenance(
             [(f.get("title", ""), " ".join(f.get("evidence", [])
               if isinstance(f.get("evidence"), list) else [str(f.get("evidence", ""))]),
               f.get("source")) for f in _fs])
         _issues += check_source_tags(_fs)
         if _dates:
-            # Try with input_file_count (corpus_guard v2+); fall back silently if not supported
-            try:
-                _issues += check_provenance(_gblob, _dates[0], _dates[-1],
-                                            gps_present=True, input_file_count=total)
-            except (TypeError, Exception):
-                try:
-                    _issues += check_provenance(_gblob, _dates[0], _dates[-1],
-                                               gps_present=True)
-                except Exception:
-                    pass  # corpus_guard provenance check unavailable
+            _issues += check_provenance(_gblob, _dates[0], _dates[-1], gps_present=True)
         if _issues:
             print(f"\n  [GUARD] {len(_issues)} issue(s) - report stamped UNVERIFIED:")
             for _code, _msg in _issues:

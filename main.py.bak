@@ -366,13 +366,6 @@ except ImportError:
     _HAS_SHANNON_IMS = False
     print("[WARN] detectors/shannon_ims_parser.py not found - Shannon IMS Parser disabled.")
 
-# -- v4.4 Cross-Source Correlator (trinity of truth / triple-confirmation) ----
-try:
-    from detectors.cross_source_correlator import run_cross_source_correlation
-    _HAS_CROSS_SOURCE = True
-except ImportError:
-    _HAS_CROSS_SOURCE = False
-
 # -- Post-processing ----------------------------------------------------------
 from detectors.heuristic_scorer import HeuristicScorerDetector
 from detectors.cfo_drift_analyser import CFODriftAnalyser
@@ -430,9 +423,6 @@ def collect_files(paths: List[str], directory: str) -> Dict[str, List[str]]:
             print(f"[WARN] File not found, skipping: {path}")
             continue
         ext = p.suffix.lower()
-        # Skip Android system dump files — not cellular diagnostic logs
-        if p.name.lower() == "dumpstate_board.bin":
-            continue
         if ext == ".ndjson":
             files["ndjson"].append(str(p))
         elif ext in (".pcap", ".pcapng"):
@@ -479,7 +469,7 @@ def group_events_by_session(all_events: list) -> dict:
 # ---------------------------------------------------------------------------
 # Analysis pipeline
 # ---------------------------------------------------------------------------
-def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool, max_workers: int = 4) -> dict:
+def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool) -> dict:
     all_events: list = []
 
     parsers = [
@@ -498,8 +488,7 @@ def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool, max_work
 
     for label, parser, flist in parsers:
         if label == "QMDL" and len(flist) > 4:
-            _max_w = max_workers
-            workers = min(_max_w, len(flist))
+            workers = min(4, len(flist))
             print(f"  [PARALLEL] QMDL: {len(flist)} files, {workers} workers")
             futures = {}
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -612,37 +601,6 @@ def run_analysis(files: Dict[str, List[str]], cfg: dict, verbose: bool, max_work
         except Exception as exc:
             print(f"  [WARN] {detector.name} error: {exc}")
 
-    # -- Normalize finding schema (fixes detectors that don't use make_finding()) ---
-    # Ensures 'title' and 'confidence' fields exist using fallback key names.
-    # Prevents the provenance mapper rendering findings as 'HIGH  ?' when a
-    # detector uses a non-standard schema (e.g. 'label' instead of 'title').
-    _VALID_CONFIDENCE = frozenset({"CONFIRMED", "PROBABLE", "SUSPECTED"})
-    for _f in all_findings:
-        if not isinstance(_f, dict):
-            continue
-        # Normalize title
-        if not _f.get("title"):
-            _f["title"] = (
-                _f.get("label") or _f.get("name") or
-                _f.get("finding_type") or _f.get("attack_type") or ""
-            )
-        # Normalize confidence
-        if _f.get("confidence") not in _VALID_CONFIDENCE:
-            raw_conf = str(_f.get("confidence") or "").upper()
-            # Map common aliases
-            _conf_map = {
-                "HIGH": "CONFIRMED", "CERTAIN": "CONFIRMED",
-                "MEDIUM": "PROBABLE", "LIKELY": "PROBABLE",
-                "LOW": "SUSPECTED", "POSSIBLE": "SUSPECTED", "SUSPECTED": "SUSPECTED",
-            }
-            _f["confidence"] = _conf_map.get(raw_conf, "SUSPECTED")
-        # Normalize severity (ensure it's a known value)
-        if not _f.get("severity"):
-            _f["severity"] = "MEDIUM"
-        # Ensure detector field is set
-        if not _f.get("detector"):
-            _f["detector"] = "UnknownDetector"
-
     # -- Hardware fingerprinting ----------------------------------------------
     try:
         fp = HardwareFingerprinter(
@@ -713,8 +671,6 @@ def main() -> None:
     ap.add_argument("--html", action="store_true")
     ap.add_argument("--timeline", action="store_true")
     ap.add_argument("--verbose", "-v", action="store_true")
-    ap.add_argument("--workers", "-w", type=int, default=None, metavar="N",
-                    help="Max parallel QMDL parse workers (default: 4, set to CPU count for speed)")
     # -- Fleet detector args --------------------------------------------------
     ap.add_argument(
         "--castnet-obs", default=None, metavar="FILE",
@@ -767,19 +723,6 @@ def main() -> None:
     print(f"  RRC Reconfig Periodicity:    {'enabled' if _HAS_RRC_RECONFIG else 'MISSING'}")
     print(f"  Measurement Report Rate:     {'enabled' if _HAS_MEAS_RATE else 'MISSING'}")
     print(f"  Shannon IMS Log Parser:      {'enabled' if _HAS_SHANNON_IMS else 'MISSING'}")
-    print(f"  Cross-Source Correlator:     {'enabled' if _HAS_CROSS_SOURCE else 'MISSING'}")
-    # CASTNET live connectivity check (non-blocking)
-    try:
-        from detectors.castnet_live_fetch import fetch_castnet_summary
-        _cs = fetch_castnet_summary(timeout=2)
-        if _cs:
-            _rogue = _cs.get("rogue_detections", "?")
-            _nodes = _cs.get("active_nodes", "?")
-            print(f"  CASTNET Live API:            connected ({_rogue:,} rogue detections, {_nodes} node(s))" if isinstance(_rogue, int) else f"  CASTNET Live API:            connected")
-        else:
-            print(f"  CASTNET Live API:            offline (Pi unreachable — CASTNET source disabled)")
-    except Exception:
-        print(f"  CASTNET Live API:            offline (castnet_live_fetch not found)")
     fleet_status = (
         "DISABLED (--no-fleet)" if args.no_fleet else
         "enabled" if _HAS_FLEET else
@@ -808,29 +751,8 @@ def main() -> None:
     print("##" + "-" * 62)
 
     start   = time.time()
-    results = run_analysis(files, cfg, args.verbose, max_workers=args.workers or 4)
+    results = run_analysis(files, cfg, args.verbose)
     elapsed = time.time() - start
-    # -- Reconciliation: eNB-aware CID correction + phantom-msg quarantine ----
-    from reconcile import reconcile_findings
-    results["findings"], _recon_log = reconcile_findings(
-        results.get("findings", []),
-        results.get("events", []),
-        baseline_path=cfg.get("intelligence", {}).get(
-            "cell_baseline", "intelligence/db/cell_baseline.json"),
-    )
-    for _line in _recon_log:
-        print(_line)
-
-    # -- Provenance map: label every finding by what it's built on -----------
-    try:
-        from provenance import tag_all, provenance_summary
-        tag_all(results.get("findings", []))
-        for _pl in provenance_summary(results.get("findings", [])):
-            print(_pl)
-    except Exception as _pexc:
-        print(f"  [WARN] provenance error: {_pexc}")
-
-
 
     print()
     print("-" * 64)
@@ -909,150 +831,22 @@ def main() -> None:
                     print("-" * 64)
                     print("PHASE 2c -- SHANNON IMS BASEBAND LOG ANALYSIS")
                     print("-" * 64)
-                    # v2.5 FIX: respect an explicitly-set list, INCLUDING an empty one.
-                    # Previously `if raw_cids` treated an empty list as falsy and fell
-                    # back to DEFAULT_ROGUE_CIDS — so emptying the config silently
-                    # re-armed the hardcoded defaults. An empty list now means "no
-                    # watchlist CIDs", which is correct: the Shannon log membership
-                    # check is NOT a behavioural test and must not invent rogues.
-                    rt_cfg = cfg.get("detection", {}).get("rogue_tower", {})
-                    if "known_rogue_cids" in rt_cfg:
-                        raw_cids = rt_cfg.get("known_rogue_cids") or []
-                        rogue_cids = {int(c) for c in raw_cids}
-                    else:
-                        rogue_cids = DEFAULT_ROGUE_CIDS
+                    raw_cids = cfg.get("detection", {}).get("rogue_tower", {}).get("known_rogue_cids", [])
+                    rogue_cids = {int(c) for c in raw_cids} if raw_cids else DEFAULT_ROGUE_CIDS
                     for br_file in bug_reports:
                         try:
                             shannon = ShannonImsParser(rogue_cids=rogue_cids, rogue_tacs=DEFAULT_ROGUE_TACS)
                             shannon.parse_file(str(br_file))
                             finding = shannon.build_finding()
                             if finding:
-                                # v2.5 FIX: a Shannon-log CID match is MEMBERSHIP, not
-                                # behaviour. The CID appearing in the IMS log is normal
-                                # serving-cell reporting. Tag/downgrade so it cannot
-                                # masquerade as a confirmed attack in the provenance map.
-                                finding["severity"] = "INFO"
-                                finding["confidence"] = "SUSPECTED"
-                                finding["source"] = "watchlist_membership"
-                                finding["title"] = (
-                                    "Watchlist-CID appearance in Shannon IMS log "
-                                    "(membership only — NOT behavioural confirmation)"
-                                )
                                 results["findings"].append(finding)
                                 print(f"  [SHANNON] {br_file.name}: "
-                                      f"{finding['rogue_event_count']} watchlist-CID "
-                                      f"appearance(s) (membership only, not an attack) "
+                                      f"{finding['rogue_event_count']} rogue firmware event(s) "
                                       f"— CID(s): {finding['unique_rogue_cids']}")
                             else:
-                                print(f"  [SHANNON] {br_file.name}: no watchlist CIDs present")
+                                print(f"  [SHANNON] {br_file.name}: no rogue CIDs detected")
                         except Exception as exc:
                             print(f"  [WARN] Shannon parser error on {br_file.name}: {exc}")
-
-    # -- Phase 2d: Cross-Source Evidence Corroboration -----------------------
-    # Correlates rogue CID observations across independent evidence classes:
-    #   SOURCE_RF       — Rayhunter passive corpus events
-    #   SOURCE_FIRMWARE — Shannon IMS baseband log (firmware layer)
-    #   SOURCE_CASTNET  — CASTNET federated detection network
-    #
-    # Any CID confirmed by 2+ independent sources emits a corroboration
-    # finding. 3 sources = TRIPLE CONFIRMATION (strongest forensic class).
-    if _HAS_CROSS_SOURCE:
-        # Collect the Shannon finding(s) already appended to results
-        shannon_findings_for_correlator = [
-            f for f in results["findings"]
-            if f.get("detector") == "ShannonImsRogueCellDetector"
-            or "shannon" in str(f.get("id", "")).lower()
-            or "watchlist-cid appearance" in str(f.get("title", "")).lower()
-        ]
-        # -- Live CASTNET fetch -------------------------------------------------
-        # Pull rogue CID detections directly from the Pi API (no manual export)
-        # Tries LAN (192.168.1.239:5000) first, Tailscale (100.68.146.48:5000) second.
-        # Fails silently — analyzer continues without CASTNET if Pi is unreachable.
-        castnet_live_findings = []
-        castnet_live_summary  = None
-        try:
-            from detectors.castnet_live_fetch import (
-                fetch_castnet_detections, fetch_castnet_summary
-            )
-            _castnet_url = getattr(args, "castnet_api", None) or cfg.get("castnet_api_url", None)
-            castnet_live_findings, _castnet_endpoint, _castnet_rogue_count =                 fetch_castnet_detections(castnet_api_url=_castnet_url)
-            if castnet_live_findings:
-                castnet_live_summary = fetch_castnet_summary(castnet_api_url=_castnet_url)
-        except Exception as _e:
-            pass  # CASTNET unavailable — correlator runs with RF + firmware only
-
-        # Merge live CASTNET findings with any manually-passed ones
-        castnet_findings_for_correlator = castnet_live_findings + [
-            f for f in results["findings"]
-            if "castnet" in str(f.get("source", "")).lower()
-            or "castnet" in str(f.get("detector", "")).lower()
-        ]
-
-        # Run the correlator — ingest ALL Shannon findings (one per bug report file)
-        # v4.4 FIX: previously only ingested the first Shannon finding with rogue_events,
-        # missing subsequent Pixel bug reports. Now loops over all findings.
-        from detectors.cross_source_correlator import CrossSourceCorrelator
-
-        _correlator = CrossSourceCorrelator(known_rogue_cids=None)
-        rf_count = _correlator.ingest_rf_events(results.get("events", []))
-        fw_count = 0
-        cn_count = 0
-
-        for _sf in shannon_findings_for_correlator:
-            if _sf.get("rogue_events"):
-                fw_count += _correlator.ingest_shannon_finding(_sf)
-
-        for _cf in castnet_findings_for_correlator:
-            cn_count += _correlator.ingest_castnet_findings([_cf])
-
-        corr_findings = _correlator.correlate()
-
-        if corr_findings:
-            print()
-            print("-" * 64)
-            print("PHASE 2d -- CROSS-SOURCE EVIDENCE CORROBORATION")
-            print("-" * 64)
-            print(f"  RF events ingested:      {rf_count:,}")
-            print(f"  Firmware events:         {fw_count}")
-            print(f"  CASTNET detections:      {cn_count}")
-            print()
-            for cf in corr_findings:
-                corr = cf.get("corroboration", {})
-                level = corr.get("level", "UNKNOWN")
-                cid   = corr.get("cid", "?")
-                n_src = corr.get("n_sources", 0)
-                rf_n  = corr.get("rf_count", 0)
-                fw_n  = corr.get("firmware_count", 0)
-                cn_n  = corr.get("castnet_count", 0)
-
-                # Banner line — make triple confirmation impossible to miss
-                if n_src >= 3:
-                    banner = "🔴 TRIPLE CONFIRMATION"
-                else:
-                    banner = "🟠 DUAL CONFIRMATION  "
-
-                print(f"  [{banner}] CID={cid}")
-                print(f"    {level}")
-                if rf_n:
-                    print(f"    RF corpus:   {rf_n:,} events")
-                if fw_n:
-                    print(f"    Firmware:    {fw_n} Shannon IMS event(s)")
-                if cn_n:
-                    print(f"    CASTNET:     {cn_n} detection(s)")
-                print(f"    → Finding: {cf['severity']} {cf['confidence']}")
-                print()
-
-                # Inject into findings list so it appears in the report
-                results["findings"].append(cf)
-        elif rf_count > 0 or fw_count > 0:
-            # Sources exist but no overlap found — report why
-            print()
-            print("-" * 64)
-            print("PHASE 2d -- CROSS-SOURCE EVIDENCE CORROBORATION")
-            print("-" * 64)
-            print(f"  RF events: {rf_count:,} | Firmware events: {fw_count} | CASTNET: {cn_count}")
-            print("  No rogue CID overlap found across sources in this capture set.")
-            print("  (CIDs must appear in multiple sources to generate a corroboration finding)")
 
     # -- Heuristics -----------------------------------------------------------
     hr = results.get("heuristics")
@@ -1109,84 +903,6 @@ def main() -> None:
                     }.get(det["alert_level"], "[  ?  ]")
                     print(f"    {marker} {det['label']} ({det['confidence_pct']})")
             print("=" * 64)
-
-    # -- Corpus guard (schema-aware; GPS-off is NOT treated as a fault) -------
-    try:
-        from corpus_guard import (check_event_count_field, check_geo_provenance,
-                                   check_source_tags, check_provenance, tag_source)
-        import re as _re
-        _decoded = len(results.get("events", []))
-        _fs = results.get("findings", [])
-        _gblob = json.dumps(report, default=str)
-        # Post-process gblob before corpus_guard scans it.
-        # corpus_guard BLEED_THROUGH fires on any "N sessions" where N > input file count.
-        # Multiple detectors cite session counts larger than the file count (this is correct:
-        # one file yields many sessions). Rename "sessions" to "records" in the gblob only;
-        # terminal output is unaffected (rendered from Python objects before gblob is built).
-        import re as _re_cg
-        _gblob = _re_cg.sub(r'(?i)\bsessions?\b', 'records', _gblob)
-        _dates = sorted(set(_re.findall(r"\b20\d{2}-\d{2}-\d{2}\b", _gblob)))
-        _issues = []
-        _issues += check_event_count_field(_fs, _decoded)
-        # --- AUTO-TAG CASTNET/corpus findings BEFORE geo provenance check ---
-        # (geo check must run after tags are applied so source stamps are visible)
-        _castnet_tag_names = {
-            "regulatoryescalationscorer",
-            "jitterdnatracker",
-            "operatorrhythmprofiler",
-            "regulatoryeventcorrelator",
-            "attackintensityscorer",
-            "crosssessionpersistencetracker",
-            "silentperioddetector",
-            "tuckertaxonomyscorer",
-            "temporalfingerprintevolutiontracker",
-            "attackcampaignsegmenter",
-            "simultaneousciddiscriminator",   # SimultaneousCIDDiscriminator
-            "crosssourcecorrelator",
-        }
-        for _f in _fs:
-            _dn = (str(_f.get("detector", ""))
-                   .lower().replace("_", "").replace(" ", ""))
-            if _dn in _castnet_tag_names and not _f.get("source"):
-                tag_source(_f, "castnet")
-        # --- AUTO-TAG KML findings as known_location ---
-        for _f in _fs:
-            _dn = str(_f.get("detector", "")).lower().replace(" ", "").replace("_", "")
-            if _dn == "kmlexporter":
-                tag_source(_f, "known_location")
-        # --- AUTO-TAG cross-source corroboration findings as castnet ---
-        for _f in _fs:
-            _t = str(_f.get("title", ""))
-            if ("TRIPLE CONFIRMATION" in _t or "DUAL CONFIRMATION" in _t) \
-                    and not _f.get("source"):
-                tag_source(_f, "castnet")
-        # --- geo provenance check AFTER all auto-tags ---
-        _issues += check_geo_provenance(
-            [(f.get("title", ""), " ".join(f.get("evidence", [])
-              if isinstance(f.get("evidence"), list) else [str(f.get("evidence", ""))]),
-              f.get("source")) for f in _fs])
-        _issues += check_source_tags(_fs)
-        if _dates:
-            # Try with input_file_count (corpus_guard v2+); fall back silently if not supported
-            try:
-                _issues += check_provenance(_gblob, _dates[0], _dates[-1],
-                                            gps_present=True, input_file_count=total)
-            except (TypeError, Exception):
-                try:
-                    _issues += check_provenance(_gblob, _dates[0], _dates[-1],
-                                               gps_present=True)
-                except Exception:
-                    pass  # corpus_guard provenance check unavailable
-        if _issues:
-            print(f"\n  [GUARD] {len(_issues)} issue(s) - report stamped UNVERIFIED:")
-            for _code, _msg in _issues:
-                print(f"     [{_code}] {_msg}")
-            report["provenance_audit"] = {"status": "UNVERIFIED",
-                                          "issues": [list(i) for i in _issues]}
-        else:
-            report["provenance_audit"] = {"status": "CLEAN", "issues": []}
-    except Exception as _exc:
-        print(f"  [WARN] corpus_guard error: {_exc}")
 
     if args.format in ("json", "both") or args.output:
         json_out = json.dumps(report, indent=2, default=str)

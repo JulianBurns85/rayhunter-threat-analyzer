@@ -112,7 +112,16 @@ class NovelCidDetector(BaseDetector):
             tac_val  = obs_sorted[0][2] or "unknown"
             plmn_val = obs_sorted[0][3] or "unknown"
             window_str = f"{window_secs:.3f}s"
-            mnc_guess  = "01" if tac_val == "12385" else "03"
+            # Derive MNC from observed PLMN (format "MCC-MNC") rather than
+            # guessing from TAC — TAC-based guess gets Optus (MNC=02) wrong.
+            if plmn_val and "-" in plmn_val:
+                mnc_guess = plmn_val.split("-", 1)[1].zfill(2)
+            elif tac_val == "12385":
+                mnc_guess = "01"   # Telstra
+            elif tac_val == "30336":
+                mnc_guess = "03"   # Vodafone
+            else:
+                mnc_guess = "01"   # fallback
 
             findings.append(make_finding(
                 detector=self.name,

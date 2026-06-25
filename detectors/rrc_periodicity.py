@@ -148,7 +148,21 @@ class RRCPeriodicityDetector:
             "finding_type":       "rrc_periodicity",
             "detector":           self.name,
             "severity":           "CRITICAL" if machine_precision else "HIGH",
-            "confirmed":          True,
+            # Standard make_finding() keys (required by provenance mapper and reporter)
+            "title":              label,
+            "description":        msg,
+            "confidence":         "CONFIRMED" if machine_precision else "PROBABLE",
+            "technique":          "Metronomic RRCConnectionRelease cycle — timed measurement sweep",
+            "evidence":           [msg],
+            "event_count":        len(in_range),
+            "recommended_action": (
+                "Document RRC release cycle as evidence of timed measurement sweep. "
+                "Cross-reference with RRCConnectionRelease timing for composite signature. "
+                "Include in VicPol USB evidence package."
+            ),
+            "spec_reference":     "3GPP TS 36.331 §5.3.8; YAICD P14_t3212_anomaly",
+            # Legacy keys preserved for backward compatibility
+            "confirmed":          machine_precision,
             "label":              label,
             "profile_hint":       profile_hint,
             "yaicd_param":        "P14_t3212_anomaly",
@@ -185,13 +199,37 @@ class RRCPeriodicityDetector:
         if sd_ms >= self.sd_threshold_ms:
             return []
 
+        _msg2 = (
+            f"Unknown metronomic RRCConnectionRelease: "
+            f"{mean_s:.3f}s mean, SD {sd_ms:.1f}ms "
+            f"across {len(intervals)} intervals. "
+            f"SD < {self.sd_threshold_ms}ms = machine-precision. "
+            f"Does not match srsRAN ({self.cycle_s}s) "
+            f"or Harris T1 ({self.harris_t1_s}s). "
+            f"Novel hardware or modified firmware. "
+            f"YAICD P14 = 1.5 (Ziayi et al. 2021)."
+        )
+        _label2 = f"Unknown metronomic cycle ({mean_s:.1f}s)"
         return [{
             "type":             "rrc_periodicity",
             "finding_type":     "rrc_periodicity",
             "detector":         self.name,
             "severity":         "HIGH",
+            # Standard make_finding() keys
+            "title":            _label2,
+            "description":      _msg2,
+            "confidence":       "CONFIRMED",
+            "technique":        "Metronomic RRCConnectionRelease cycle — unknown hardware signature",
+            "evidence":         [_msg2],
+            "event_count":      len(intervals),
+            "recommended_action": (
+                "Document cycle as novel hardware signature. Cross-reference with "
+                "bladeRF IQ-domain CFO measurement for hardware identification."
+            ),
+            "spec_reference":   "3GPP TS 36.331 §5.3.8; YAICD P14_t3212_anomaly",
+            # Legacy keys preserved
             "confirmed":        True,
-            "label":            f"Unknown metronomic cycle ({mean_s:.1f}s)",
+            "label":            _label2,
             "profile_hint":     "commercial_unknown",
             "yaicd_param":      "P14_t3212_anomaly",
             "cycle_seconds":    round(mean_s, 3),
@@ -199,16 +237,7 @@ class RRCPeriodicityDetector:
             "std_dev_ms":       round(sd_ms, 1),
             "total_releases":   len(releases),
             "machine_precision": True,
-            "message": (
-                f"Unknown metronomic RRCConnectionRelease: "
-                f"{mean_s:.3f}s mean, SD {sd_ms:.1f}ms "
-                f"across {len(intervals)} intervals. "
-                f"SD < {self.sd_threshold_ms}ms = machine-precision. "
-                f"Does not match srsRAN ({self.cycle_s}s) "
-                f"or Harris T1 ({self.harris_t1_s}s). "
-                f"Novel hardware or modified firmware. "
-                f"YAICD P14 = 1.5 (Ziayi et al. 2021)."
-            ),
+            "message":          _msg2,
         }]
 
     # -----------------------------------------------------------------------

@@ -117,16 +117,16 @@ class HardwareAttributionEngineV2(BaseDetector):
 
         # ── Simultaneous Operation Proof ─────────────────────────────────────
         evidence.append(
-            "SIMULTANEOUS OPERATION PROOF:\n"
+            "SIMULTANEOUS MULTI-BAND OPERATION PROOF:\n"
             "  Band 28 (700MHz) and Band 3 (1800MHz) co-presence detected.\n"
             "  Frequency ratio: 2.43x -- physically impossible on single RF chain.\n"
-            "  srsRAN (Device B) can only operate on ONE band at a time.\n"
-            "  Therefore: when Band 28 + Band 3 are BOTH present:\n"
-            "    Band 28 CIDs (137713155) = professional hardware (Device A)\n"
-            "    Band 3 CIDs (137713165) = consumer SDR (Device B)\n"
-            "  These timestamps represent PROVEN SIMULTANEOUS DUAL OPERATION.\n"
-            "  Cross-reference these timestamps with operator location data\n"
-            "  to place the operator at the ~547m location during dual operation."
+            "  NOTE (ECI decomposition): All four rogue CIDs (137713155/165/175/195)\n"
+            "  are sectors of ONE rogue eNB (537942). Band co-presence across 4 sectors\n"
+            "  proves MULTI-CHAIN PROFESSIONAL HARDWARE (Harris HailStorm II class,\n"
+            "  4 independent Tx/Rx chains) -- not necessarily two separate physical devices.\n"
+            "  Definitive device-count attribution requires bladeRF IQ-domain CFO\n"
+            "  measurement to distinguish single multi-chain unit from dual devices.\n"
+            "  Co-presence timestamps place operator within ~547m during active periods."
         )
 
         # ── Specific Configuration Fingerprint ───────────────────────────────
@@ -202,9 +202,9 @@ class HardwareAttributionEngineV2(BaseDetector):
         findings.append(make_finding(
             detector=self.name,
             title=(
-                "HARDWARE ATTRIBUTION -- DUAL DEVICE PROFILE -- "
-                "DEVICE A: PROFESSIONAL HARDWARE [PROBABLE], "
-                "DEVICE B: CONSUMER SDR PROFILE [PROBABLE]"
+                "HARDWARE ATTRIBUTION -- MULTI-CHAIN HARDWARE PROFILE -- "
+                "PROFESSIONAL HARDWARE [PROBABLE] + srsRAN TIMING SIGNATURE [PROBABLE]"
+                " -- NOTE: all CIDs are sectors of eNB 537942 (ECI confirmed)"
             ),
             description=(
                 "Hardware profile synthesis from all detector findings. "

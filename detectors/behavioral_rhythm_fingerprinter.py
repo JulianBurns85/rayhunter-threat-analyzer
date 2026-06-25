@@ -55,7 +55,9 @@ SESSION_GAP_S = 3600  # 1 hour
 
 # Device A TAC (Harris — shows operator's employer schedule)
 DEVICE_A_TAC = 12385
-DEVICE_B_TAC = 30336
+# INTEGRITY NOTE: DEVICE_B_TAC was 30336 (Vodafone) which is confirmed legitimate.
+# Removed — there is no confirmed Device B TAC. Set to None to disable Device B analysis.
+DEVICE_B_TAC = None  # Disabled: TAC=30336 = confirmed legitimate Vodafone (eNB 32849)
 
 # CASTNET DB paths
 CASTNET_PATHS = [

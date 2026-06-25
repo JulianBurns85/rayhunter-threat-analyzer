@@ -47,8 +47,13 @@ TIMESTAMP_WINDOW_S = 86400   # 24 hours
 # ── Known rogue CID sets (from investigation) ─────────────────────── #
 ROGUE_CIDS_TELSTRA  = {137713155, 137713165, 137713175, 137713195,
                         135836161, 135836171, 135836191}
-ROGUE_CIDS_VODAFONE = {8409357, 8409367, 8409387, 8409397,
-                        8666381, 8666391, 8666411}
+# INTEGRITY NOTE (25 Jun 2026): CIDs 8409357/367/387/397 (eNB 32849, TAC=30336)
+# are CONFIRMED LEGITIMATE Vodafone macro infrastructure (CASTNET Finding [20]).
+# They have been removed from ROGUE_CIDS_VODAFONE to prevent false DUAL CONFIRMATIONs.
+ROGUE_CIDS_VODAFONE = {8666381, 8666391, 8666411}  # post-ACMA cluster only
+
+# Confirmed legitimate Vodafone macro (excluded from rogue analysis)
+CONFIRMED_LEGITIMATE_VODAFONE = {8409357, 8409367, 8409387, 8409397}  # eNB 32849 / TAC 30336
 ROGUE_CIDS_ALL      = ROGUE_CIDS_TELSTRA | ROGUE_CIDS_VODAFONE
 
 
@@ -339,7 +344,7 @@ class CrossSourceCorrelator:
             if cid in ROGUE_CIDS_TELSTRA:
                 device_note = "Device A (TAC=12385, Telstra) — Harris HailStorm candidate"
             elif cid in ROGUE_CIDS_VODAFONE:
-                device_note = "Device B (TAC=30336, Vodafone) — srsRAN/bladeRF candidate"
+                device_note = "Secondary cluster (post-ACMA, Vodafone mask) — status unconfirmed"
             else:
                 device_note = "Unknown device cluster"
 

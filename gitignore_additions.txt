@@ -1,0 +1,68 @@
+# ============================================================
+#  rayhunter-threat-analyzer — sensitive-data ignore rules
+#  APPEND these to the existing .gitignore (don't replace it).
+#  Goal: code can be shared/pushed; evidence, PII, and case
+#  material can NEVER be committed.
+# ============================================================
+
+# --- Raw captures & decoded data (contains identifiers, locations) ---
+*.qmdl
+*.pcapng
+*.pcap
+*.ndjson
+*.sigmf-data
+*.sigmf-meta
+*.iq
+*.cfile
+*-gps.ndjson
+
+# --- Generated reports & maps (case material, subject address) ---
+*.kml
+rayhunter_report_*.json
+rayhunter_forensic_map_*.kml
+reports and maps/
+/reports/
+/output/
+/evidence/
+/archive/
+
+# --- Bug reports (IMSI/IMEI, SIM data, device serials) ---
+bugreport-*.txt
+bugreport-*.zip
+*.bugreport
+
+# --- CASTNET node data (detection history, timestamps, locations) ---
+castnet_*.csv
+castnet_*.json
+*castnet*obs*.json
+/intelligence/db/
+cell_baseline.json
+
+# --- AFP / regulator submission material ---
+*submission*.docx
+*submission*.pdf
+*MediaBriefing*
+*_exhibit_*.json
+*_exhibit_*.pdf
+afp_*.json
+copresence_*.json
+*warrant*
+
+# --- Personal / config that may hold paths, keys, GPS ---
+config.local.yaml
+*.local.yaml
+.env
+secrets.yaml
+
+# --- Python noise ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ============================================================
+#  Allowlist (force-track these even though patterns above are broad)
+#  A small example baseline is fine to share; the REAL one is ignored above.
+# ============================================================
+!cell_baseline.example.json
+!config.yaml

@@ -47,8 +47,7 @@ class OperationalProfileSynthesiser(BaseDetector):
         "carrier_telstra":     "505-01 TAC=12385",
         "carrier_vodafone":    "505-03 TAC=30336",
         "rogue_cids_telstra":  ["137713155","137713165","137713175","137713195"],
-        "rogue_cids_vodafone": ["8409357","8409367","8409387","8409397",
-                                "8666381","8666391","8666411"],
+        "rogue_cids_vodafone": ["8666381","8666391","8666411"],  # eNB 32849 removed — confirmed legit Vodafone
         "acma_ref":            "ENQ-1851DVJH04",
         "vicpol_refs":         ["CIRS-20260331-141","CIRS-20260413-6"],
         "afp_referral":        "May 2026",

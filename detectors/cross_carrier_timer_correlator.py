@@ -48,7 +48,10 @@ from .base import BaseDetector, make_finding
 
 # ── Device identification ──────────────────────────────────────────────────── #
 DEVICE_A_TAC = 12385   # Harris HailStorm — employer hardware
-DEVICE_B_TAC = 30336   # srsRAN personal SDR
+# INTEGRITY NOTE (25 Jun 2026): DEVICE_B_TAC was 30336 which is CONFIRMED LEGITIMATE
+# Vodafone macro infrastructure (eNB 32849, CASTNET Finding [20]).
+# Detector disabled until a valid secondary rogue TAC is identified.
+DEVICE_B_TAC = None  # Disabled — TAC=30336 = confirmed legitimate Vodafone
 
 # Known confirmed metronomic interval from corpus analysis
 CONFIRMED_PERIOD_S   = 210.182
@@ -91,6 +94,10 @@ class CrossCarrierTimerCorrelator(BaseDetector):
     )
 
     def analyze(self, events: List[Dict]) -> List[Dict]:
+        # Guard: DEVICE_B_TAC was removed (confirmed legitimate Vodafone).
+        # Return empty until a valid secondary rogue TAC is identified.
+        if DEVICE_B_TAC is None:
+            return []
         findings = []
 
         # ── Step 1: Load CASTNET timestamps ───────────────────────────────── #

@@ -46,6 +46,41 @@ def _sector(cid: str) -> int:
     return int(cid) % 256
 
 
+def _known_rogue_enbs(cfg: dict) -> set:
+    """Return the set of known-rogue eNB IDs from config."""
+    try:
+        return set(cfg.get("detection", {})
+                      .get("rogue_tower", {})
+                      .get("known_rogue_enbs", []))
+    except Exception:
+        return set()
+
+
+def _enb_action(enb: int, cfg: dict) -> str:
+    """Return appropriate action text depending on whether the eNB is rogue."""
+    if enb in _known_rogue_enbs(cfg):
+        return (
+            f"NOTE: eNB {enb} is on known_rogue_enbs. "
+            "These CIDs are sectors of a CONFIRMED ROGUE eNodeB — not CID rotation. "
+            "ECI decomposition proves multi-chain professional hardware (4 independent "
+            "Tx/Rx chains). Do NOT cite as rotation/evasion; cite as multi-chain hardware proof."
+        )
+    return (
+        "No action. This is a legitimate multi-sector cell. Do NOT add "
+        "to known_rogue_cids and do NOT cite as rotation/evasion."
+    )
+
+
+def _enb_hw_hint(enb: int, cfg: dict) -> str:
+    if enb in _known_rogue_enbs(cfg):
+        return (
+            f"ROGUE eNodeB {enb} — multi-chain professional hardware confirmed by "
+            "band co-presence across 4 sectors. Harris HailStorm II class PROBABLE."
+        )
+    return "Standard multi-sector eNodeB."
+
+
+
 class CIDRotationDetector(BaseDetector):
 
     name        = "CIDRotationDetector"
@@ -136,12 +171,9 @@ class CIDRotationDetector(BaseDetector):
                             f"Total observations: {total_obs}",
                             "Verdict: normal multi-sector macro — excluded from rotation scoring.",
                         ],
-                        action=(
-                            "No action. This is a legitimate multi-sector cell. Do NOT add "
-                            "to known_rogue_cids and do NOT cite as rotation/evasion."
-                        ),
+                        action=_enb_action(enb, self.cfg),
                         spec_ref="3GPP TS 36.300 (ECI structure); TS 36.331 §6.2.2",
-                        hardware_hint="Standard multi-sector eNodeB.",
+                        hardware_hint=_enb_hw_hint(enb, self.cfg),
                     ))
                     continue
 

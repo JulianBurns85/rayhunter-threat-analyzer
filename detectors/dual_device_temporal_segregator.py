@@ -33,12 +33,19 @@ from typing import List, Dict, Optional, Tuple
 from .base import BaseDetector, make_finding
 
 # Device identification by TAC
-DEVICE_A_TACS = {12385}          # Harris professional hardware
+DEVICE_A_TACS = {12385}          # Rogue rogue eNB 537942 (Harris hardware)
 DEVICE_A_CIDS = {137713155, 137713165, 137713175, 137713195,
                  135836161, 135836171, 135836191}
-DEVICE_B_TACS = {30336}          # srsRAN personal SDR
-DEVICE_B_CIDS = {8409357, 8409367, 8409387, 8409397,
-                 8666381, 8666391, 8666411}
+
+# INTEGRITY NOTE (25 Jun 2026): TAC=30336 / eNB 32849 is CONFIRMED LEGITIMATE
+# Vodafone macro infrastructure (CASTNET Finding [20], ECI decomposition).
+# These CIDs must be excluded from Device B — they are the phone connecting
+# to a real Vodafone tower, not a rogue second device.
+CONFIRMED_LEGITIMATE_TACS = {30336}
+CONFIRMED_LEGITIMATE_CIDS = {8409357, 8409367, 8409387, 8409397}  # eNB 32849
+
+DEVICE_B_TACS = set()            # TAC=30336 removed — confirmed legitimate Vodafone
+DEVICE_B_CIDS = {8666381, 8666391, 8666411}  # post-ACMA cluster (status unconfirmed)
 
 # Business hours definition (AEST)
 BIZ_START = 8   # 08:00 AEST
@@ -90,6 +97,10 @@ class DualDeviceTemporalSegregator(BaseDetector):
             hour_aest = self._get_hour_aest(ts)
             ts_str = self._ts_to_aest(ts)
             is_biz = BIZ_START <= hour_aest < BIZ_END
+
+            # Skip confirmed legitimate Vodafone infrastructure — eNB 32849 / TAC=30336
+            if (tac in CONFIRMED_LEGITIMATE_TACS) or (cid in CONFIRMED_LEGITIMATE_CIDS):
+                continue
 
             # Classify device
             is_a = (cid in DEVICE_A_CIDS) or (tac in DEVICE_A_TACS and cid not in DEVICE_B_CIDS)
@@ -244,15 +255,14 @@ class DualDeviceTemporalSegregator(BaseDetector):
                 f"Zero business hours: {len(b_zero_biz_hours)}"
             ),
             description=(
-                f"Hour-by-hour analysis proves Device A (Harris employer hardware) "
-                f"and Device B (srsRAN personal SDR) operate on deliberately "
-                f"segregated schedules. Device B is {device_b_after_fraction:.1%} "
+                f"Hour-by-hour analysis of rogue Device A (TAC=12385, Harris hardware) "
+                f"vs secondary unconfirmed device cluster (CIDs 8666381/391/411). "
+                f"Secondary cluster is {device_b_after_fraction:.1%} "
                 f"concentrated in after-hours operation — ZERO events at "
                 f"{len(b_zero_biz_hours)} business hours where Device A is active. "
-                f"This is not coincidence — it is deliberate audit evasion architecture "
-                f"designed to keep Device B off employer logging systems. "
-                f"The pattern was present from day one (January 23, 2026) — "
-                f"premeditated, not reactive."
+                f"NOTE: TAC=30336 / eNB 32849 has been excluded as confirmed legitimate "
+                f"Vodafone macro infrastructure — temporal patterns attributed to that "
+                f"TAC reflect normal carrier alternation, not a rogue second device."
             ),
             severity=severity,
             confidence=confidence,
@@ -264,10 +274,11 @@ class DualDeviceTemporalSegregator(BaseDetector):
             ),
             evidence=evidence,
             hardware_hint=(
-                "Device A: Harris HailStorm II (employer-issued, TAC=12385) — "
-                "active during business hours, legitimate-looking logs. "
-                "Device B: BladeRF 2.0 + srsRAN (personal, TAC=30336) — "
-                "active after hours, off all employer records."
+                "Device A: Harris HailStorm II (TAC=12385, eNB 537942) — "
+                "confirmed rogue, active across full corpus. "
+                "Secondary device cluster (CIDs 8666381/391/411 post-ACMA): "
+                "confirmation status unconfirmed — requires further analysis. "
+                "NOTE: TAC=30336 / eNB 32849 excluded as confirmed legitimate Vodafone macro."
             ),
             action=(
                 "1. Corporate audit CANNOT find Device B — it is off employer records.\n"

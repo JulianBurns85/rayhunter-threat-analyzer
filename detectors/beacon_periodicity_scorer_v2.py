@@ -70,8 +70,10 @@ from .base import BaseDetector, make_finding
 
 # TAC=12385 Telstra rogue CIDs
 ROGUE_CIDS_TELSTRA = {137713155, 137713165, 137713175, 137713195, 135836161, 135836171, 135836191}
-# TAC=30336 Vodafone rogue CIDs
-ROGUE_CIDS_VODAFONE = {8409357, 8409367, 8409387, 8409397, 8666381, 8666391, 8666411}
+# INTEGRITY NOTE (25 Jun 2026): CIDs 8409357/367/387/397 (eNB 32849, TAC=30336)
+# are CONFIRMED LEGITIMATE Vodafone macro infrastructure (CASTNET Finding [20]).
+# Removed to prevent false rogue attributions.
+ROGUE_CIDS_VODAFONE = {8666381, 8666391, 8666411}  # post-ACMA cluster only
 # Combined set for interval analysis
 # NOTE: Hardware classification is derived from interval analysis below,
 # not pre-assigned. Labels like "Device A / Device B" belong in case notes

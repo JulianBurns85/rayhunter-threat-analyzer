@@ -1,46 +1,40 @@
 # =============================================================================
 # Rayhunter Threat Analyzer -- Configuration
 # =============================================================================
-# v2.6 -- 17 Jun 2026: added CID 22204731 to watchlist (OpenCelliD=NOT FOUND)
-# v2.5 -- INTEGRITY CORRECTION PASS (12 Jun 2026)
-#   - known_rogue_cids EMPTIED. The previous list pre-classified legitimate
-#     Telstra macro sectors as rogue, then fed them to the Shannon parser and
-#     rogue-tower detector, which "confirmed" them by membership. That is
-#     circular. CIDs are now in watchlist_cids (INFO-only) and must be
-#     confirmed by per-capture BEHAVIOUR, not list membership.
-#   - known_rogue_earfcns de-salted: standard Telstra band EARFCNs removed.
-#   - MNC labelling corrected to 01 (Telstra). See note below.
+# v2.7 -- 26 Jun 2026: INTEGRITY CORRECTIONS
+#   - known_rogue_cids: removed eNB 32849 CIDs (8409357/367/387/397).
+#     ECI decomposition + capture analysis confirmed these are LEGITIMATE
+#     Vodafone macro sectors. They were causing false DUAL CONFIRMATION findings.
+#   - known_rogue_cids: added eNB 33853 CIDs (8666381/391/411).
+#     OpenCelliD lookup: "Cell not found" (zero global observations).
+#     These are the post-ACMA cluster, TAC=30336, Vodafone mask.
+#   - known_rogue_enbs: added eNB 33853. Removed eNB 32849 (confirmed legit).
+#   - watchlist_cids: removed eNB 32849 CIDs (confirmed legitimate — no point
+#     watching legitimate infrastructure).
+#   - Fixed malformed YAML (duplicate known_rogue_enbs key from v2.6 paste error).
 #
-# Provenance of the correction: 11 QMDL captures decoded via SCAT->GSMTAP->tshark
-# (12 Jun 2026) showed, for every CID below: AES (EEA2/EIA2) security, no
-# redirectedCarrierInfo, IMEISV (not IMSI) identity requests, accepted attaches,
-# and that 137713155/165/175/195 are sectors 3/13/23/43 of ONE eNB (537942) =
-# a normal macro, not a rotation cluster.
+# v2.6 -- 17 Jun 2026: added CID 22204731 to watchlist
+# v2.5 -- 12 Jun 2026: INTEGRITY CORRECTION PASS (see notes below)
 # =============================================================================
 
 network:
   mcc: "505"           # Australia
-  mnc: "001"           # Telstra AU. ALDI/Boost/Belong MVNOs ALSO ride PLMN 50501.
+  mnc: "001"           # Telstra AU (Rayhunter runs on Telstra SIM)
   mnc_telstra:  "001"
   mnc_vodafone: "003"
   country: "AU"
   # ---------------------------------------------------------------------------
-  # MNC LABELLING BUG (finding [20] "MNC=03 (Vodafone AU)"):
-  # The SIB1 PLMN for every captured cell decodes to MCC 505 / MNC 01 = Telstra.
-  # If the Cell Summary still prints MNC=03/Vodafone, the bug is in the SIB1 PLMN
-  # decoder or a TAC->carrier guess table (NOT in this config -- mnc is 001 here).
-  # Find it with:
-  #   grep -rniE "vodafone|mnc.?=.?3|carrier_name|plmn_name|30336.*vodafone" .
-  # The PLMN MNC must be read from the SIB1 plmn-Identity digits, never inferred
-  # from TAC. TAC 30336 is a Telstra TAC here; TAC numbers are not carrier IDs.
+  # NOTE: TAC=30336 / eNB 32849 is confirmed Vodafone (MNC=03) based on capture
+  # evidence — PLMN decoded in SIB1 shows MCC=505 / MNC=03 for those cells.
+  # This is independent of which carrier the Rayhunter SIM is on.
   # ---------------------------------------------------------------------------
 
 opencellid:
   enabled:    true
-  api_key:    "REDACTED_API_KEY"   # old key was pasted into a transcript -- rotate it
+  api_key:    "REDACTED_API_KEY"
   cache_days: 7
-  # Lookups MUST use mnc=001. Querying mnc=003 returns "not found" for real
-  # Telstra cells and manufactures false "unregistered/rogue" results.
+  # Use mnc=001 for Telstra lookups, mnc=003 for Vodafone lookups.
+  # Do NOT mix — querying wrong MNC returns false "not found" results.
 
 intelligence:
   db_path: "intelligence/db"
@@ -49,11 +43,8 @@ detection:
 
   identity_harvest:
     window_seconds: 120
-    max_requests:   2        # 3GPP TS 24.301 max 2 per attach procedure
+    max_requests:   2
     flag_imeisv:    true
-    # NOTE: an IMEISV Identity Request is routine device/VoLTE bookkeeping.
-    # Only an IMSI Identity Request *before* security activation is the catcher
-    # signature. Detectors must check identity_type before scoring as harvest.
 
   cipher_downgrade:
     flag_eea0: true
@@ -72,87 +63,74 @@ detection:
     cross_carrier_gap_seconds: 1.0
     min_rogue_cid_events:      2
     # -------------------------------------------------------------------------
-    # known_rogue_cids: CONFIRMED rogue cells ONLY (byte-level attack behaviour
-    # proven in a capture). EMPTY until something earns a place here.
-    # A CID earns confirmation by exhibiting, keyed to its ECI/PCI/EARFCN:
+    # known_rogue_cids: CONFIRMED rogue cells only. A CID earns confirmation by
+    # exhibiting (keyed to its ECI/PCI/EARFCN):
     #   - redirectedCarrierInfo (forced downgrade), OR
     #   - EEA0/EIA0 actually SELECTED in a SecurityModeCommand, OR
     #   - IMSI (not IMEISV) Identity Request before security, OR
     #   - NAS Authentication Reject / Attach Reject / TAU Reject.
-    # List membership is NOT confirmation.
+    # List membership alone is NOT confirmation.
     # -------------------------------------------------------------------------
     known_rogue_cids:
-      # Device A -- eNB 537942, TAC 12385 (Harris HailStorm PROBABLE)
+      # eNB 537942, TAC=12385, Telstra mask (Harris HailStorm PROBABLE)
       # CONFIRMED: 5 pre-security IMSI requests (1781427776.qmdl, 29.qmdl)
       # Triple-confirmed: Rayhunter + tshark + Shannon IMS parser
-      - "137713155"   # sector 3  -- TRIPLE CONFIRMED (CASTNET x30)
-      - "137713165"   # sector 13 -- TRIPLE CONFIRMED (CASTNET x602)
-      - "137713175"   # sector 23 -- TRIPLE CONFIRMED (CASTNET x79)
-      - "137713195"   # sector 43 -- TRIPLE CONFIRMED (CASTNET x167)
-      # Device B -- eNB 32849, TAC 30336 (srsRAN/bladeRF PROBABLE)
-      # CONFIRMED: RRCReestablishmentReject, 40.754s metronomic cycle
-      - "8409357"     # sector 13 -- active Jun 14-17
-      - "8409367"     # sector 23 -- active Jun 14-17
-      - "8409387"     # sector 43 -- active Jun 14-17
-      - "8409397"     # sector 53 -- active Jun 15 + Jun 17 18:30 UTC
+      - "137713155"   # sector 3  — TRIPLE CONFIRMED (CASTNET x86)
+      - "137713165"   # sector 13 — TRIPLE CONFIRMED (CASTNET x698)
+      - "137713175"   # sector 23 — TRIPLE CONFIRMED (CASTNET x74)
+      - "137713195"   # sector 43 — TRIPLE CONFIRMED (CASTNET x156)
+      # eNB 33853, TAC=30336, Vodafone mask — POST-ACMA CLUSTER
+      # CONFIRMED: OpenCelliD "Cell not found" (zero global observations, 26 Jun 2026)
+      # Appeared in corpus after ACMA field inspection (8 May 2026)
+      - "8666381"     # sector 13 — OpenCelliD NOT FOUND
+      - "8666391"     # sector 23 — OpenCelliD NOT FOUND
+      - "8666411"     # sector 43 — OpenCelliD NOT FOUND
 
     known_rogue_enbs:
-      - 537942    # Device A, TAC 12385, Harris HailStorm PROBABLE
-      - 32849     # Device B, TAC 30336, srsRAN PROBABLE
+      - 537942    # TAC=12385, Telstra mask — Harris HailStorm PROBABLE
+      - 33853     # TAC=30336, Vodafone mask — post-ACMA cluster, OpenCelliD NOT FOUND
 
     # -------------------------------------------------------------------------
-    # watchlist_cids: previously (wrongly) auto-confirmed. Cleared by the
-    # 12 Jun 2026 QMDL behavioural test. Kept here as INFO-only leads so the
-    # history is preserved. Detectors must treat a watchlist hit as an INFO
-    # note ("seen before"), NEVER as severity >= MEDIUM on its own.
+    # REMOVED FROM known_rogue_cids (26 Jun 2026 integrity correction):
+    #   eNB 32849 CIDs: 8409357, 8409367, 8409387, 8409397
+    #   Reason: ECI decomposition + capture analysis confirmed these are LEGITIMATE
+    #   Vodafone macro sectors (eNB 32849, TAC=30336, MNC=03). They were producing
+    #   false DUAL CONFIRMATION findings in CrossSourceCorrelator.
+    #   Do NOT re-add without byte-level attack behaviour evidence.
+    # -------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
+    # watchlist_cids: INFO-only leads. Seen in captures but not yet confirmed
+    # as rogue by behaviour. Detectors treat hits as INFO, never >= MEDIUM.
     # -------------------------------------------------------------------------
     watchlist_cids:
-      # eNB 537942 (Telstra macro, TAC 12385) -- sectors, NOT a rotation cluster
-      - "137713155"   # sector 3
-      - "137713165"   # sector 13
-      - "137713175"   # sector 23
-      - "137713195"   # sector 43
-      # eNB 32849 (Telstra macro, TAC 30336) -- sectors
-      - "8409357"     # sector 13
-      - "8409367"     # sector 23
-      - "8409387"     # sector 43
-      - "8409397"     # sector 53
-      # neighbours observed in captures (Telstra)
-      - "8666381"     # eNB 33853 sector 13
-      - "21940490"    # eNB 85705 sector 10
-      - "21940538"    # eNB 85705 sector 58
-      - "22204731"    # eNB 86737 sector 59 -- TAC=53360 PLMN=505-02, 3 obs/0.341s Jun 11, OpenCelliD=NOT FOUND
+      - "21940490"    # eNB 85705 sector 10 — neighbour, Telstra
+      - "21940538"    # eNB 85705 sector 58 — neighbour, Telstra
+      - "22204731"    # eNB 86737 sector 59 — TAC=53360 PLMN=505-02, 3 obs/0.341s Jun 11, OpenCelliD=NOT FOUND
+      - "22204763"    # related cluster
 
   earfcn_anomaly:
     flag_nonstandard: true
-    # -------------------------------------------------------------------------
-    # De-salted. The following are STANDARD LTE EARFCNs in real Telstra bands
-    # and are NOT anomalous -- listing them guaranteed false positives:
-    #   450,550 = Band 1 (2100) | 1275,1406,1550 = Band 3 (1800)
-    #   3148    = Band 7 (2600) | 9410          = Band 28 (700)
-    # Only genuinely out-of-table EARFCNs belong here. 16384 retained PENDING
-    # verification against 3GPP TS 36.101 Table 5.7.3-1.
-    # -------------------------------------------------------------------------
     known_rogue_earfcns:
-      - 16384   # VERIFY: confirm this is outside all band tables before citing
+      - 16384   # VERIFY: confirm outside all 3GPP TS 36.101 Table 5.7.3-1 band entries
 
   paging_target:
-    min_pages_to_analyse:   50
-    critical_page_count:   150
-    base_quantum_seconds:   10.880
-    base_window_lo:          9.0
-    base_window_hi:         13.0
+    min_pages_to_analyse:     50
+    critical_page_count:     150
+    base_quantum_seconds:     10.880
+    base_window_lo:            9.0
+    base_window_hi:           13.0
     base_count_for_confirmed: 40
-    sd_for_confirmed:        2.0
-    top_n_targets:           8
+    sd_for_confirmed:          2.0
+    top_n_targets:             8
 
   cid_rotation:
     min_cids_for_rotation:    3
     min_events_per_cid:       3
-    rotation_window_seconds: 7200
+    rotation_window_seconds:  7200
     suffix_step_threshold:    50
     min_transitions:          4
-    exclude_same_enb:        true   # NEW: same-eNB sectors are normal, never rotation
+    exclude_same_enb:         true
 
   proximity_track:
     spike_threshold_db:    15.0

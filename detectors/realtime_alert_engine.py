@@ -53,7 +53,7 @@ from typing import Dict, List, Optional, Callable
 
 # ── Known-threat parameters (from confirmed Cranbourne East corpus) ──── #
 KNOWN_ROGUE_TA = 7                      # TA=7 ~547m fixed installation
-KNOWN_ROGUE_TACS = {12385, 30336}       # Telstra Device A, Vodafone Device B
+KNOWN_ROGUE_TACS = {12385}    # TAC=30336 removed — confirmed legitimate Vodafone (eNB 32849)
 KNOWN_ROGUE_CIDS = {21940289, 2861966, 2862043,
                     137713165}          # FlashCatch CIDs + Wallet Inspector CID
 

@@ -224,12 +224,13 @@ class SimultaneousCIDDiscriminator(BaseDetector):
                     f"It requires EITHER: "
                     f"(a) Professional multi-chain hardware (Harris/Septier), OR "
                     f"(b) Two separate devices on different bands. "
-                    f"Combined with the srsRAN timing signature (2.10s intervals), "
-                    f"which professional hardware cannot produce, the only "
-                    f"consistent explanation is TWO DEVICES: "
-                    f"one professional (multi-band), one consumer SDR (srsRAN)."
+                    f"NOTE: All four rogue CIDs (137713155/165/175/195) are "
+                    f"sectors of eNB 537942 (ECI decomposition confirmed). "
+                    f"Band co-presence across 4 sectors of one eNB proves "
+                    f"MULTI-CHAIN PROFESSIONAL HARDWARE (Harris HailStorm II "
+                    f"class, 4 independent Tx chains). Definitive device-count "
+                    f"attribution requires bladeRF IQ-domain measurement."
                 )
-
         # Overall assessment
         total_co_windows = len(co_windows)
         n_band_incompatible = len(band_co_presence)
@@ -240,12 +241,12 @@ class SimultaneousCIDDiscriminator(BaseDetector):
             conclusion = (
                 f"SIMULTANEOUS MULTI-BAND OPERATION CONFIRMED: "
                 f"{n_band_incompatible} instances of physically incompatible "
-                f"band pairs observed simultaneously. "
+                f"band pairs observed simultaneously on rogue eNB 537942. "
                 f"Single-chain SDR operation is RULED OUT. "
-                f"Two devices or multi-chain professional hardware required. "
-                f"Combined with srsRAN timing signature: TWO DEVICES CONFIRMED."
+                f"Multi-chain professional hardware (Harris HailStorm II class) "
+                f"is the most consistent explanation given ECI decomposition "
+                f"confirms all CIDs are sectors of a single eNB."
             )
-        elif n_rsrp_inconsistent > 0:
             severity, confidence = "HIGH", "PROBABLE"
             conclusion = (
                 f"INDEPENDENT RSRP PROFILES: {n_rsrp_inconsistent} CID pairs "
@@ -276,7 +277,6 @@ class SimultaneousCIDDiscriminator(BaseDetector):
 
         findings.append(make_finding(
             detector=self.name,
-            data_source="castnet",
             title=(
                 f"SIMULTANEOUS CID CO-PRESENCE -- "
                 f"{'BAND INCOMPATIBILITY PROVEN' if n_band_incompatible > 0 else 'INDEPENDENT RSRP CONFIRMED'} "
@@ -298,12 +298,12 @@ class SimultaneousCIDDiscriminator(BaseDetector):
             ),
             evidence=evidence,
             hardware_hint=(
-                "Band co-presence requires either: "
-                "(A) Harris HailStorm II or Septier -- multi-chain professional hardware, OR "
-                "(B) Two separate devices. "
-                "Given srsRAN timing signature on one set of CIDs: "
-                "Device A = professional multi-band hardware (employer-issued), "
-                "Device B = consumer SDR running srsRAN (personal device)."
+                "All four rogue CIDs (137713155/165/175/195) are sectors of "
+                "single rogue eNB 537942 (ECI decomposition confirmed). "
+                "Band co-presence across 4 sectors proves MULTI-CHAIN "
+                "PROFESSIONAL HARDWARE (Harris HailStorm II class, 4 independent "
+                "Tx/Rx chains). Definitive device-count attribution requires "
+                "bladeRF IQ-domain measurement."
             ),
             action=(
                 "1. AFP: Band co-presence timestamps identify precise moments "

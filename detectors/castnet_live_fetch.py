@@ -28,10 +28,12 @@ import ssl
 from typing import List, Dict, Optional, Set
 
 # Known rogue CIDs — matches cross_source_correlator.ROGUE_CIDS_ALL
+# INTEGRITY NOTE (25 Jun 2026): CIDs 8409357/367/387/397 (eNB 32849, TAC=30336)
+# are CONFIRMED LEGITIMATE Vodafone macro infrastructure (CASTNET Finding [20]).
+# Removed to prevent false rogue detections from legitimate Vodafone connections.
 CASTNET_ROGUE_CIDS = {
-    137713155, 137713165, 137713175, 137713195,  # eNB 537942 / TAC 12385 / Telstra
-    8409357, 8409367, 8409387, 8409397,           # eNB 32849  / TAC 30336 / Vodafone
-    8666381, 8666391, 8666411,                    # post-ACMA cluster
+    137713155, 137713165, 137713175, 137713195,  # eNB 537942 / TAC 12385 / Telstra (ROGUE)
+    8666381, 8666391, 8666411,                   # post-ACMA cluster (status unconfirmed)
 }
 
 # API endpoints to try in order

@@ -90,8 +90,7 @@ _KNOWN_ROGUE_CIDS: set = {
     # Telstra AU (MCC=505 MNC=001 TAC=12385) — Cranbourne East
     "137713195", "137713175", "137713165", "137713155",
     "135836191", "135836171", "135836161",
-    # Vodafone AU (MCC=505 MNC=003 TAC=30336) — Cranbourne East
-    "8409357", "8409367", "8409387", "8409397",
+    # CIDs 8409357/367/387/397 removed — confirmed legitimate Vodafone (eNB 32849)
     # Post-ACMA-visit zero-observation CIDs
     "8666381", "8666391", "8666411",
 }

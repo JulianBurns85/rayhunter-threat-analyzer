@@ -73,9 +73,13 @@ class AttackCampaignSegmenter(BaseDetector):
         findings = []
 
         # Extract timestamped events
+        # Filter to valid timestamp range — excludes raw DIAG frame timestamps
+        # from SCAT-timeout fallback (values outside 2025-2027 are corrupt)
+        _VALID_MIN, _VALID_MAX = 1735689600, 1798761600  # 2025-01-01, 2027-01-01
         ts_events = sorted([
-            (self._get_ts(e), e) for e in events
-            if self._get_ts(e) is not None
+            (ts, e) for e in events
+            if (ts := self._get_ts(e)) is not None
+            and _VALID_MIN <= ts <= _VALID_MAX
         ], key=lambda x: x[0])
 
         if len(ts_events) < 50:
@@ -240,7 +244,7 @@ class AttackCampaignSegmenter(BaseDetector):
             evidence=evidence,
             hardware_hint=(
                 f"Sustained multi-campaign surveillance across "
-                f"{(ts_events[-1][0]-ts_events[0][0])/86400:.0f} days. "
+                f"{(min(ts_events[-1][0],_VALID_MAX)-max(ts_events[0][0],_VALID_MIN))/86400:.0f} days. "
                 f"Not consistent with testing or accidental interference."
             ),
             action=(

@@ -25,17 +25,13 @@ DEFAULT_ROGUE_CIDS = {
     137713165,
     137713175,
     137713195,
-    # TAC=30336 cluster (Device B — srsRAN candidate)
-    8409357,
-    8409367,
-    8409387,
-    8409397,
+    # CIDs 8409357/367/387/397 removed — confirmed legitimate Vodafone (eNB 32849)
     8666381,
     8666391,
     8666411,
 }
 
-DEFAULT_ROGUE_TACS = {12385, 30336}
+DEFAULT_ROGUE_TACS = {12385}  # TAC=30336 removed — confirmed legitimate Vodafone
 
 # ── Regex patterns ─────────────────────────────────────────────────────────────
 # Matches: 06-07 12:30:12.483 10163 2422 2422 I SHANNON_IMS: 9039 [NETW] ... UNSOL {RILC_UNSOL_IMS_SUPPORT_SERVICE} ...
