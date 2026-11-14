@@ -1,0 +1,169 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rayhunter 3D Thermodynamic RRC/NAS Threat Analyzer</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; overflow: hidden;
+      background: #04060a; color: #e2e8f0;
+      font-family: 'Consolas', 'Courier New', monospace;
+      user-select: none;
+    }
+    #hud-left {
+      position: absolute; top: 16px; left: 16px; width: 410px;
+      background: rgba(8, 12, 22, 0.90);
+      border: 1px solid #00f0ff; border-left: 4px solid #00f0ff;
+      padding: 14px 16px; border-radius: 6px;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.15);
+      z-index: 10;
+    }
+    .hud-title {
+      font-size: 13px; font-weight: bold; color: #00f0ff;
+      letter-spacing: 0.8px; margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .badge {
+      background: rgba(0, 240, 255, 0.15); color: #00f0ff;
+      padding: 2px 7px; border-radius: 3px; font-size: 11px;
+    }
+    .metric-row {
+      display: flex; justify-content: space-between;
+      font-size: 12px; margin: 6px 0; color: #94a3b8;
+    }
+    .val-cyan { color: #00f0ff; font-weight: bold; }
+    .val-red { color: #f43f5e; font-weight: bold; text-shadow: 0 0 8px rgba(244,63,94,0.6); }
+    .val-green { color: #34d399; font-weight: bold; }
+    #hud-right {
+      position: absolute; top: 16px; right: 16px; width: 420px;
+      background: rgba(8, 12, 22, 0.90);
+      border: 1px solid #1e293b; border-right: 4px solid #00f0ff;
+      padding: 14px 16px; border-radius: 6px;
+      z-index: 10;
+    }
+    #event-list { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+    .ev-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(15, 23, 42, 0.8);
+      border-left: 3px solid #00f0ff;
+      padding: 5px 8px; border-radius: 3px; font-size: 11px;
+    }
+    .ev-item.crit { border-left-color: #f43f5e; background: rgba(136, 19, 55, 0.35); }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+  <div id="hud-left">
+    <div class="hud-title">
+      <span>RAYHUNTER 3GPP STATE TENSOR</span>
+      <span class="badge" id="ws-badge">CONNECTING</span>
+    </div>
+    <div class="metric-row"><span>SOURCE:</span><span class="val-cyan" id="m-mode">INIT</span></div>
+    <div class="metric-row"><span>THREAT STATUS:</span><span class="val-green" id="m-status">NOMINAL</span></div>
+    <div class="metric-row"><span>TRANSITION SURPRISE (σ):</span><span class="val-cyan" id="m-surprise">0.00 bits</span></div>
+    <div class="metric-row"><span>RRC/NAS ENTROPY (H):</span><span class="val-cyan" id="m-entropy">0.000 bits</span></div>
+  </div>
+  <div id="hud-right">
+    <div class="hud-title">
+      <span>LIVE 3GPP RRC/NAS TRANSITION FEED</span>
+      <span class="badge">16x16 TENSOR</span>
+    </div>
+    <div id="event-list"></div>
+  </div>
+  <script>
+    const GRID = 16;
+    let ws = null;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04060a);
+    const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 500);
+    camera.position.set(0, 28, 34);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    scene.add(new THREE.AmbientLight(0x1e293b, 1.5));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.3);
+    dirLight.position.set(20, 40, 25);
+    scene.add(dirLight);
+    const geom = new THREE.BoxGeometry(1.15, 1.0, 1.15);
+    geom.translate(0, 0.5, 0);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.7 });
+    const mesh = new THREE.InstancedMesh(geom, mat, GRID * GRID);
+    scene.add(mesh);
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    const currentH = new Float32Array(GRID * GRID).fill(0.3);
+    const offset = (GRID - 1) * 1.5 / 2;
+    for (let i = 0; i < GRID * GRID; i++) { mesh.setColorAt(i, new THREE.Color(0x0a192f)); }
+    mesh.instanceColor.needsUpdate = true;
+    function connectWS() {
+      ws = new WebSocket('ws://localhost:8765');
+      ws.onopen = () => {
+        const b = document.getElementById('ws-badge');
+        b.textContent = 'LIVE 3GPP STREAM';
+        b.style.color = '#34d399';
+      };
+      ws.onmessage = (ev) => {
+        const data = JSON.parse(ev.data);
+        const w = data.weights;
+        const anom = data.anomalies;
+        const rep = data.report;
+        document.getElementById('m-mode').textContent = rep.mode;
+        const stEl = document.getElementById('m-status');
+        stEl.textContent = rep.status;
+        stEl.className = rep.status.includes('CRITICAL') || rep.status.includes('WARN') ? 'val-red' : 'val-green';
+        document.getElementById('m-surprise').textContent = rep.max_surprise.toFixed(2) + ' bits';
+        document.getElementById('m-entropy').textContent = rep.mean_entropy.toFixed(3) + ' bits';
+        document.getElementById('event-list').innerHTML = rep.events.map(e => {
+          const isCrit = e.severity.includes('CRITICAL') || e.severity.includes('WARN');
+          return `<div class="ev-item ${isCrit ? 'crit' : ''}">
+            <span>[${e.step}] ${e.transition}</span>
+            <span style="color:${isCrit ? '#f43f5e' : '#00f0ff'}; font-weight:bold;">${e.surprise}</span>
+          </div>`;
+        }).join('');
+        let idx = 0;
+        for (let r = 0; r < GRID; r++) {
+          for (let c = 0; c < GRID; c++) {
+            const baseVal = w[r][c];
+            const anomVal = anom[r][c];
+            const target = 0.3 + (baseVal * 8.0) + (anomVal * 18.0);
+            currentH[idx] += (target - currentH[idx]) * 0.35;
+            dummy.position.set(c * 1.5 - offset, 0, r * 1.5 - offset);
+            dummy.scale.set(1, currentH[idx], 1);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(idx, dummy.matrix);
+            if (anomVal > 0.08) {
+              color.setHSL(0.97, 0.95, Math.min(0.75, 0.35 + anomVal * 0.5));
+            } else if (baseVal > 0.05) {
+              color.setHSL(0.53, 0.90, Math.min(0.75, 0.20 + baseVal * 0.5));
+            } else {
+              color.setHSL(0.60, 0.50, 0.08);
+            }
+            mesh.setColorAt(idx, color);
+            idx++;
+          }
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.instanceColor.needsUpdate = true;
+      };
+      ws.onclose = () => setTimeout(connectWS, 1000);
+    }
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    connectWS();
+    animate();
+  </script>
+</body>
+</html>
