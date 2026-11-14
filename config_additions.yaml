@@ -1,0 +1,25 @@
+# Merge into config.yaml (keys are read by the v4.4.3 detectors).
+analysis:
+  scope: full_investigation
+  local_timezone: "Australia/Melbourne"   # DST-aware (AEDT Oct-Apr)
+  min_events_per_day: 50                  # sparse days dropped from span/rhythm
+  work_hours: [8, 18]
+  control_validated: false                # set true only after a control capture is compared
+  # rhythm_control: {biz_share: 0.0, weekday_share: 0.0}   # from a control run's rhythm finding
+
+opencellid:
+  enabled: true
+  # api_key: leave blank and set env var OPENCELLID_API_KEY instead
+  cache_days: 7
+  max_lookups: 50
+  timeout_seconds: 5
+
+detection:
+  rogue_tower:
+    list_match_as_confirmed: false        # list membership alone is not evidence
+
+# Keep personal/case details OUT of source control (gitignore a local override file):
+case_context:
+  subject_address: ""
+  references: []                          # e.g. regulator/police reference numbers
+  hypotheses: []                          # analyst hypotheses, printed as "not derived from capture"

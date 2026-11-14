@@ -1,0 +1,48 @@
+import argparse
+import json
+from pathlib import Path
+
+
+def analyze_capture_baseline(directory_path):
+    """Scans a directory of NDJSON diagnostic logs to compute
+
+    grounded, byte-backed metrics without historical corpus bleed.
+    """
+    target_dir = Path(directory_path)
+    ndjson_files = list(target_dir.glob("*.ndjson"))
+
+    total_records = 0
+    identity_requests = 0
+    unencrypted_switches = 0
+
+    print(f"[*] Scanning control directory: {target_dir}")
+    print(f"[*] Found {len(ndjson_files)} NDJSON files for analysis.")
+
+    for file_path in ndjson_files:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    total_records += 1
+
+                    # Example metric tracking
+                    msg_type = record.get("message_type", "")
+                    if "identity_request" in msg_type.lower():
+                        identity_requests += 1
+        except Exception as e:
+            continue
+
+    print("\n--- CONTROL BASELINE REPORT ---")
+    print(f"Total Records Processed : {total_records}")
+    print(f"Identity Requests Found : {identity_requests}")
+    print("--------------------------------\n")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run baseline capture analysis.")
+    parser.add_argument("--dir", required=True, help="Path to the control/capture directory")
+    args = parser.parse_args()
+
+    analyze_capture_baseline(args.dir)

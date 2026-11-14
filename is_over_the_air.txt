@@ -1,0 +1,28 @@
+def is_over_the_air(frame):
+    """
+    Validates whether a frame represents an actual over-the-air transmission
+    by checking for the presence of the LTE RRC layer in the protocol stack.
+    Modem-decoded plaintext views lack 'lte_rrc'.
+    """
+    protocols = getattr(frame, "protocols", "")
+    return "lte_rrc" in protocols
+
+
+def p7_should_score(frame, prior_ctx=None):
+    """
+    Evaluates whether an identity request/response frame should trigger P7.
+    """
+    # Reject modem plaintext artifact views immediately
+    if not is_over_the_air(frame):
+        return False
+
+    # Check security header type (0 typically means unprotected/plaintext carrier)
+    sec_header = getattr(frame, "sec_header", None)
+    if sec_header is not None and sec_header != 0:
+        return False  # Protected carrier -> info only
+
+    # If historical/prior context already accounts for it, skip
+    if prior_ctx:
+        return False
+
+    return True  # Genuine unencrypted, on-air identity request

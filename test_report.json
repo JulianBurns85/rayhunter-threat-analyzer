@@ -1,0 +1,309 @@
+{
+  "generated_at": "2026-10-21T01:04:17.586059+00:00",
+  "analysis_duration_seconds": 0.1,
+  "summary": {
+    "threat_level": "CRITICAL",
+    "total_findings": 12,
+    "severity_breakdown": {
+      "CRITICAL": 6,
+      "HIGH": 4,
+      "MEDIUM": 1,
+      "INFO": 1
+    },
+    "total_events_analyzed": 16,
+    "confirmed_attacks": 8,
+    "techniques_detected": [
+      "IMSI Harvesting via Identity Request Flood",
+      "Null-Cipher Downgrade (EEA0/EIA0 \u2014 3GPP TS 33.401 violation)",
+      "LTE\u21922G Forced Downgrade via GERAN Redirect",
+      "IMSI-Targeted Paging (location surveillance)",
+      "IMSI Harvest \u2192 Location Confirmation (correlated event chain)",
+      "Multi-EARFCN Cell Operation (rogue SDR base station signature)",
+      "IMEISV Harvesting / Targeted Device Fingerprinting",
+      "Auth Reject \u2192 Identity Request (identity extraction)",
+      "Unprovoked Identity Solicitation",
+      "Unauthenticated Security Mode Negotiation",
+      "LTE ProSe Proximity Tracking (3GPP TS 36.331 \u00a76.3.6)",
+      "Data-quality check \u2014 unverified handover flag"
+    ]
+  },
+  "hardware_candidates": [
+    {
+      "hardware": "Insufficient data for classification",
+      "device": "Insufficient data for classification",
+      "confidence": 0.0,
+      "severity": "INFO",
+      "notes": "Not enough indicators to fingerprint device type.",
+      "top_profile": {
+        "name": "Criminal Actor",
+        "confidence": 0.1
+      },
+      "reasoning": []
+    }
+  ],
+  "findings": [
+    {
+      "detector": "IdentityHarvestDetector",
+      "title": "IMSI Catcher \u2014 Excessive IMSI Identity Requests",
+      "description": "3 IMSI Identity Requests (identity type 1) detected within a 120-second window. Normal LTE operation requires \u22642 Identity Requests. This pattern is a primary signature of active IMSI catcher operation targeting subscriber identity.",
+      "severity": "CRITICAL",
+      "severity_score": 5,
+      "confidence": "CONFIRMED",
+      "confidence_score": 3,
+      "technique": "IMSI Harvesting via Identity Request Flood",
+      "evidence": [
+        "[2026-03-31T14:00:00+00:00] Identity Request id_type=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:05+00:00] Identity Request id_type=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:10+00:00] Identity Request id_type=IMSI cell=98765 (synthetic_test.ndjson)"
+      ],
+      "event_count": 3,
+      "hardware_hint": "Active IMSI catcher (IMSI grabber / Stingray / Cobham / Septier)",
+      "recommended_action": "1. Preserve all NDJSON/QMDL files with SHA-256 manifest.\n2. Document exact timestamps for legal evidence.\n3. Reference 3GPP TS 24.301 \u00a75.4.4 (Identity Procedure).\n4. Submit to ACMA under Radiocommunications Act 1992 s.189.\n5. Include in AFP/ACORN referral as primary IMSI catcher evidence.",
+      "spec_reference": "3GPP TS 24.301 \u00a75.4.4, TS 33.401 \u00a78.2",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "CipherDowngradeDetector",
+      "title": "CRITICAL: Full Null-Cipher Attack (EEA0 + EIA0)",
+      "description": "1 Security Mode Command(s) negotiated with EEA0 (no encryption) AND EIA0 (no integrity protection). This violates 3GPP TS 33.401 \u00a75.1.3.2 which prohibits EIA0 in normal operation. Traffic is transmitted in PLAINTEXT with no tamper detection. This is the signature of a Man-in-the-Middle attack by a rogue base station.\n\nNOTE: If running against M7350 dual-unit captures from the Cranbourne East investigation (January 2026 onwards), zero EEA0 events are expected \u2014 Harris Transparent Proxy mode uses EEA2/EIA2. Verify against raw tshark output before submitting.",
+      "severity": "CRITICAL",
+      "severity_score": 5,
+      "confidence": "CONFIRMED",
+      "confidence_score": 3,
+      "technique": "Null-Cipher Downgrade (EEA0/EIA0 \u2014 3GPP TS 33.401 violation)",
+      "evidence": [
+        "[2026-03-31T14:00:12+00:00] Security Mode Command | EEA=EEA0 EIA=EIA0 (synthetic_test.ndjson)"
+      ],
+      "event_count": 1,
+      "hardware_hint": "Rogue eNodeB / IMSI catcher with active MitM capability (Stingray, Cobham UMTS/LTE, Septier IMSI Catcher, or similar). NOTE: Harris commercial devices in Transparent Proxy mode do NOT produce EEA0 \u2014 if this fires on Cranbourne East data it is likely a false positive from UE capability fields. Verify with tshark.",
+      "recommended_action": "VERIFY FIRST: Run tshark -r <file> -Y 'lte_rrc.SecurityModeCommand_element' -T fields -e lte_rrc.cipheringAlgorithm to confirm EEA0 in actual SMC.\n\nIf confirmed:\n1. Preserve QMDL files \u2014 the SecurityModeCommand is logged with timestamp.\n2. Cross-reference timestamps with known rogue cell activity.\n3. Cite 3GPP TS 33.401 \u00a75.1.3.2 in ACMA complaint.\n4. Submit to AFP/ACORN with SecurityModeCommand decoded packet as exhibit.",
+      "spec_reference": "3GPP TS 33.401 \u00a75.1.3.2, TS 24.301 \u00a75.4.3",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "CipherDowngradeDetector",
+      "title": "Forced 2G Downgrade (GERAN Redirect in RRC Release)",
+      "description": "1 RRC Connection Release message(s) contained a GERAN (GSM/2G) redirected carrier. This forces the device to drop to 2G where GSM's A5/1 cipher (or A5/0 \u2014 no cipher) is trivially broken. This is a classic IMSI catcher downgrade attack.",
+      "severity": "CRITICAL",
+      "severity_score": 5,
+      "confidence": "CONFIRMED",
+      "confidence_score": 3,
+      "technique": "LTE\u21922G Forced Downgrade via GERAN Redirect",
+      "evidence": [
+        "[2026-03-31T14:00:20+00:00] RRC Connection Release | EEA=None EIA=None (synthetic_test.ndjson)"
+      ],
+      "event_count": 1,
+      "hardware_hint": "Rogue LTE eNodeB with 2G fallback \u2014 forces victim to 2G where a paired GSM IMSI catcher operates",
+      "recommended_action": "1. Document the RRC Connection Release packet with GERAN IEs.\n2. Note the target ARFCN \u2014 correlate with GSM scan data.\n3. This is a two-stage attack: LTE rogue \u2192 forced 2G \u2192 passive intercept.\n4. Alert: Do not use voice calls or SMS while this is active.",
+      "spec_reference": "3GPP TS 36.331 \u00a75.3.12, TS 33.401 \u00a7C.1",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "PagingAnomalyDetector",
+      "title": "IMSI-Targeted Paging Detected",
+      "description": "3 Paging message(s) used IMSI as the paging identity. 3GPP TS 24.301 requires networks to use S-TMSI for paging in LTE. IMSI-targeted paging reveals the subscriber's permanent identity and is used by IMSI catchers to locate a specific target subscriber.",
+      "severity": "CRITICAL",
+      "severity_score": 5,
+      "confidence": "CONFIRMED",
+      "confidence_score": 3,
+      "technique": "IMSI-Targeted Paging (location surveillance)",
+      "evidence": [
+        "[2026-03-31T14:00:35+00:00] Paging paging_id=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:38+00:00] Paging paging_id=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:39+00:00] Paging paging_id=IMSI cell=98765 (synthetic_test.ndjson)"
+      ],
+      "event_count": 3,
+      "hardware_hint": "IMSI catcher in location-tracking mode",
+      "recommended_action": "1. This is a direct violation of 3GPP TS 24.301 \u00a75.6.2.\n2. Document paging channel content and timestamps.\n3. IMSI-paging combined with forced downgrade = location tracking chain.\n4. Report to ACMA and include in AFP referral.",
+      "spec_reference": "3GPP TS 24.301 \u00a75.6.2, TS 36.304 \u00a77",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "PagingAnomalyDetector",
+      "title": "IMSI Paging Within 30s of Identity Request",
+      "description": "IMSI-targeted paging occurred within 30 seconds of an Identity Request. This sequence: Identity Request \u2192 IMSI harvest \u2192 IMSI-targeted paging confirms active subscriber tracking \u2014 the attacker is confirming device location after harvesting IMSI.",
+      "severity": "CRITICAL",
+      "severity_score": 5,
+      "confidence": "CONFIRMED",
+      "confidence_score": 3,
+      "technique": "IMSI Harvest \u2192 Location Confirmation (correlated event chain)",
+      "evidence": [
+        "[2026-03-31T14:00:10+00:00] Identity Request paging_id=None cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:35+00:00] Paging paging_id=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:38+00:00] Paging paging_id=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:39+00:00] Paging paging_id=IMSI cell=98765 (synthetic_test.ndjson)"
+      ],
+      "event_count": 4,
+      "hardware_hint": null,
+      "recommended_action": "This correlated event chain (Identity Request \u2192 IMSI Paging) is the strongest possible indicator of active targeting. Submit as primary evidence to AFP.",
+      "spec_reference": "3GPP TS 24.301 \u00a75.4.4, \u00a75.6.2",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "EarfcnAnomalyDetector",
+      "title": "Cell 98765 Observed on Multiple EARFCNs: 1450, 9350",
+      "description": "Cell ID 98765 was observed operating on 2 different EARFCNs: 1450, 9350. A legitimate LTE cell transmits on exactly one EARFCN (primary frequency). Simultaneous multi-EARFCN operation from a single Cell ID is a strong indicator of a rogue base station using software-defined radio with a spoofed Cell ID.",
+      "severity": "CRITICAL",
+      "severity_score": 5,
+      "confidence": "CONFIRMED",
+      "confidence_score": 3,
+      "technique": "Multi-EARFCN Cell Operation (rogue SDR base station signature)",
+      "evidence": [
+        "Cell ID: 98765",
+        "EARFCNs observed: 1450, 9350",
+        "Event count: 16",
+        "  [2026-03-31T14:00:00+00:00] EARFCN=9350 (synthetic_test.ndjson)",
+        "  [2026-03-31T14:00:05+00:00] EARFCN=9350 (synthetic_test.ndjson)",
+        "  [2026-03-31T14:00:10+00:00] EARFCN=9350 (synthetic_test.ndjson)",
+        "  [2026-03-31T14:00:12+00:00] EARFCN=9350 (synthetic_test.ndjson)",
+        "  [2026-03-31T14:00:15+00:00] EARFCN=9350 (synthetic_test.ndjson)"
+      ],
+      "event_count": 16,
+      "hardware_hint": "SDR-based rogue eNodeB (e.g., srsRAN/OpenAirInterface on USRP/HackRF) broadcasting a spoofed Cell ID across multiple frequencies.",
+      "recommended_action": "1. This is one of the strongest rogue tower indicators.\n2. Document each EARFCN \u2192 Cell ID pairing with timestamps.\n3. Cross-reference EARFCNs against Rayhunter Unit 2 data.\n4. A real cell has one EARFCN \u2014 multiple EARFCNs = fake cell.\n5. Include as primary exhibit in ACMA / AFP submissions.",
+      "spec_reference": "3GPP TS 36.211 \u00a75 (EARFCN definition), TS 36.331 \u00a76.2.2",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.539742"
+    },
+    {
+      "detector": "IdentityHarvestDetector",
+      "title": "IMEISV Device Fingerprinting Detected \u2014 1 Event(s)",
+      "description": "1 NAS Identity Request(s) for IMEISV (identity type 3) observed. The device attached using a GUTI (temporary identity \u2014 no IMSI exposed on attach), but the rogue cell subsequently demanded the IMEISV: the device's hardware fingerprint (IMEI + software version). This uniquely identifies the specific physical handset. Legitimate networks do not request IMEISV during normal operation \u2014 this is targeted device identification. Confirmed via tshark on raw PCAPNG binary (1778156124.pcapng): frames 650, 1098, 1970, 2639 all decode as msg_emm_type=0x55, id_type2=IMEISV (3). Source: 3GPP TS 24.301 \u00a75.4.4.3.",
+      "severity": "HIGH",
+      "severity_score": 4,
+      "confidence": "CONFIRMED",
+      "confidence_score": 3,
+      "technique": "IMEISV Harvesting / Targeted Device Fingerprinting",
+      "evidence": [
+        "[2026-03-31T14:00:42+00:00] Identity Request id_type=IMEI/IMEISV cell=98765 (synthetic_test.ndjson)"
+      ],
+      "event_count": 1,
+      "hardware_hint": "Harris commercial IMSI catcher \u2014 IMEISV collection after GUTI-based attach is consistent with Harris Transparent Proxy mode. Device could not obtain IMSI via attach (GUTI used), so fell back to IMEISV demand.",
+      "recommended_action": "IMEISV collection without lawful authority may violate the Telecommunications (Interception and Access) Act 1979 (Cth) s.7.\n1. Document frame numbers and timestamps.\n2. Note that phone used GUTI on attach \u2014 rogue cell actively demanded IMEISV.\n3. Include in ACMA ENQ-1851DVJH04 and AFP complaint.\n4. Cross-reference with UEInformationRequest-r9 events in same session.",
+      "spec_reference": "3GPP TS 24.301 \u00a75.4.4.3, TS 33.401",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.495323"
+    },
+    {
+      "detector": "IdentityHarvestDetector",
+      "title": "Identity Request Following Authentication Reject",
+      "description": "A 1\u00d7IMEI/IMEISV Identity Request was sent within 10 seconds of an Authentication Reject. This is a known IMSI catcher technique: reject authentication to force the UE to reveal its identity.",
+      "severity": "HIGH",
+      "severity_score": 4,
+      "confidence": "CONFIRMED",
+      "confidence_score": 3,
+      "technique": "Auth Reject \u2192 Identity Request (identity extraction)",
+      "evidence": [
+        "[2026-03-31T14:00:40+00:00] Authentication Reject id_type=None cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:42+00:00] Identity Request id_type=IMEI/IMEISV cell=98765 (synthetic_test.ndjson)"
+      ],
+      "event_count": 2,
+      "hardware_hint": "Active IMSI catcher (auth reject + re-request pattern)",
+      "recommended_action": "This sequence is a textbook Stingray attack. Preserve evidence.",
+      "spec_reference": "3GPP TS 24.301 \u00a75.4.3.2",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "IdentityHarvestDetector",
+      "title": "Unprovoked Identity Request \u2014 No Prior Attach",
+      "description": "1\u00d7IMEI/IMEISV, 3\u00d7IMSI Identity Request(s) observed with no preceding Attach or Tracking Area Update Request. Legitimate networks only request identity during attach procedures. Unprovoked requests indicate a rogue device is probing for subscriber or device identity.",
+      "severity": "HIGH",
+      "severity_score": 4,
+      "confidence": "PROBABLE",
+      "confidence_score": 2,
+      "technique": "Unprovoked Identity Solicitation",
+      "evidence": [
+        "[2026-03-31T14:00:00+00:00] Identity Request id_type=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:05+00:00] Identity Request id_type=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:10+00:00] Identity Request id_type=IMSI cell=98765 (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:42+00:00] Identity Request id_type=IMEI/IMEISV cell=98765 (synthetic_test.ndjson)"
+      ],
+      "event_count": 4,
+      "hardware_hint": "Rogue base station (IMSI catcher in active mode)",
+      "recommended_action": "Cross-reference with cell ID and timing to locate transmitter.",
+      "spec_reference": "3GPP TS 24.301 \u00a75.4.4",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "CipherDowngradeDetector",
+      "title": "Security Mode Command Without Prior Authentication",
+      "description": "Security Mode Command observed with no preceding Authentication Request/Response sequence. Legitimate LTE authentication must precede security mode setup. This indicates a rogue device skipping authentication to negotiate cipher parameters with an unauthenticated identity.",
+      "severity": "HIGH",
+      "severity_score": 4,
+      "confidence": "PROBABLE",
+      "confidence_score": 2,
+      "technique": "Unauthenticated Security Mode Negotiation",
+      "evidence": [
+        "[2026-03-31T14:00:12+00:00] Security Mode Command | EEA=EEA0 EIA=EIA0 (synthetic_test.ndjson)",
+        "[2026-03-31T14:01:05+00:00] Security Mode Command | EEA=EEA0 EIA=None (synthetic_test.ndjson)"
+      ],
+      "event_count": 2,
+      "hardware_hint": "Rogue eNodeB bypassing mutual authentication",
+      "recommended_action": "Cross-reference with Identity Request events. No-auth \u2192 SMC combined with EEA0 is definitive IMSI catcher evidence.",
+      "spec_reference": "3GPP TS 33.401 \u00a78.2, TS 24.301 \u00a75.4.3",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "HandoverInjectDetector",
+      "title": "LTE ProSe Proximity Config (reportProximityConfig-r9) \u2014 flag only, IE not decoded",
+      "description": "1 RRC message(s) flagged with ProSe proximity reporting. Set from a parser flag without confirming the reportProximityConfig-r9 IE in the decode \u2014 verify before citing.",
+      "severity": "MEDIUM",
+      "severity_score": 3,
+      "confidence": "SUSPECTED",
+      "confidence_score": 1,
+      "technique": "LTE ProSe Proximity Tracking (3GPP TS 36.331 \u00a76.3.6)",
+      "evidence": [
+        "[2026-03-31T14:00:50+00:00] RRC Connection Reconfiguration targetPCI=? EARFCN=?  PROSE=YES (synthetic_test.ndjson)"
+      ],
+      "event_count": 1,
+      "hardware_hint": "Modified eNodeB with ProSe capability (if IE confirmed).",
+      "recommended_action": "1. Decode the RRC frame and confirm reportProximityConfig-r9 is present.\n2. Only cite as tracking if the IE is in the decode, not just the flag.",
+      "spec_reference": "3GPP TS 36.331 \u00a76.3.6, TS 36.300 \u00a722 (ProSe), TS 33.303",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    },
+    {
+      "detector": "HandoverInjectDetector",
+      "title": "Reconfiguration flagged as handover but IE not decoded",
+      "description": "3 event(s) carried has_mobility_control=True but no decoded mobilityControlInfo payload. Parser-flag/decode mismatch, NOT a confirmed handover.",
+      "severity": "INFO",
+      "severity_score": 1,
+      "confidence": "SUSPECTED",
+      "confidence_score": 1,
+      "technique": "Data-quality check \u2014 unverified handover flag",
+      "evidence": [
+        "[2026-03-31T14:00:15+00:00] RRC Connection Reconfiguration targetPCI=? EARFCN=? MCI=YES  (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:16+00:00] RRC Connection Reconfiguration targetPCI=? EARFCN=? MCI=YES  (synthetic_test.ndjson)",
+        "[2026-03-31T14:00:17+00:00] RRC Connection Reconfiguration targetPCI=? EARFCN=? MCI=YES  (synthetic_test.ndjson)"
+      ],
+      "event_count": 3,
+      "hardware_hint": null,
+      "recommended_action": "1. Decode the flagged frames in Wireshark and confirm whether mobilityControlInfo is present.\n2. If absent, fix the parser flag.\n3. Do not cite as handover injection until corroborated.",
+      "spec_reference": "3GPP TS 36.331 5.3.5.4 (mobilityControlInfo)",
+      "data_source": "capture",
+      "found_at": "2026-10-21T01:04:17.538235"
+    }
+  ],
+  "session_correlation": {},
+  "legal_reference": {
+    "investigation_ref": "CIRS-20260331-141",
+    "acma_ref": "ACMA-ENQ-1851DVJH04",
+    "telstra_complaint": "128653446",
+    "tio_ref": "2026-03-04898",
+    "applicable_law": [
+      "Radiocommunications Act 1992 (Cth) s.189",
+      "Telecommunications (Interception and Access) Act 1979 (Cth)",
+      "Privacy Act 1988 (Cth)",
+      "Criminal Code Act 1995 (Cth) - Div 477 (Unauthorised access/modification)",
+      "3GPP TS 33.401 (LTE Security Architecture)"
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+Category,Metric,Count
+Parser Gap,Encrypted NAS Message (Skipped),716
+Parser Gap,ServingCellTiming Zero-Record Assertion,1231
+Parser Gap,Unsupported LTE MAC Framed,1022
+Parser Gap,Other Parser Gap,57
+Parser Gap,Incomplete NAS Message (NeedSize),393

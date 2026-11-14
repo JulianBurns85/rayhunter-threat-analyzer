@@ -1,0 +1,5 @@
+Category,Metric,Count
+Identity Request,Generic Identity Request,1
+Parser Gap,Encrypted NAS Message (Skipped),15830
+Parser Gap,Other Parser Gap,7250
+Parser Gap,Incomplete NAS Message (NeedSize),169

@@ -1,0 +1,4 @@
+Category,Metric,Count
+Parser Gap,Encrypted NAS Message (Skipped),194864
+Parser Gap,Other Parser Gap,54605
+Parser Gap,Incomplete NAS Message (NeedSize),17985

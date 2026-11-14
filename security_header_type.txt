@@ -1,0 +1,12 @@
+def is_over_the_air(frame):
+    # Only trust NAS security header on frames carried by RRC
+    return "lte_rrc" in frame.protocols
+
+def p7_should_score(frame, prior_ctx):
+    if not is_over_the_air(frame):
+        return False          # plaintext view, ignore for header-type checks
+    if frame.sec_header != 0:
+        return False          # protected carrier -> info only
+    if prior_ctx:
+        return False
+    return True               # plain, on-air, no context -> candidate

@@ -1,0 +1,389 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>V6.3 Autonomous Thermodynamic Search Organism — Cyber Command HUD</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; overflow: hidden;
+      background: #05070b; color: #e2e8f0;
+      font-family: 'Consolas', 'Courier New', monospace;
+      user-select: none;
+    }
+    /* Left Telemetry Panel */
+    #hud-left {
+      position: absolute; top: 16px; left: 16px; width: 380px;
+      background: rgba(8, 12, 20, 0.88);
+      border: 1px solid #00f0ff;
+      border-left: 4px solid #00f0ff;
+      padding: 14px 16px; border-radius: 6px;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.15);
+      backdrop-filter: blur(6px);
+      z-index: 10;
+    }
+    .hud-title {
+      font-size: 14px; font-weight: bold; color: #00f0ff;
+      letter-spacing: 1px; margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .badge {
+      background: rgba(0, 240, 255, 0.15); color: #00f0ff;
+      padding: 2px 6px; border-radius: 3px; font-size: 11px;
+    }
+    .metric-row {
+      display: flex; justify-content: space-between;
+      font-size: 12px; margin: 5px 0; color: #94a3b8;
+    }
+    .metric-val { color: #f8fafc; font-weight: bold; }
+    .val-cyan { color: #00f0ff; }
+    .val-amber { color: #fbbf24; }
+    .val-green { color: #34d399; }
+
+    /* Slice Selector Buttons */
+    .slice-bar {
+      margin-top: 10px; padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .slice-label { font-size: 11px; color: #64748b; margin-bottom: 6px; }
+    .slice-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+    .slice-btn {
+      flex: 1; min-width: 42px;
+      background: #0f172a; color: #94a3b8;
+      border: 1px solid #1e293b; border-radius: 3px;
+      padding: 4px 4px; font-size: 10px; font-family: inherit;
+      cursor: pointer; transition: all 0.15s; text-align: center;
+    }
+    .slice-btn:hover { border-color: #00f0ff; color: #fff; }
+    .slice-btn.active {
+      background: rgba(0, 240, 255, 0.2);
+      border-color: #00f0ff; color: #00f0ff; font-weight: bold;
+    }
+
+    /* Interactive Policy Auditor Panel (Option 1) */
+    #auditor-panel {
+      position: absolute; bottom: 16px; left: 16px; width: 380px;
+      background: rgba(8, 12, 20, 0.90);
+      border: 1px solid #1e293b; border-left: 4px solid #38bdf8;
+      padding: 12px 16px; border-radius: 6px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+      z-index: 10;
+    }
+    #audit-input {
+      width: 100%; background: #090d16; color: #00f0ff;
+      border: 1px solid #1e293b; border-radius: 4px;
+      padding: 7px 9px; font-family: inherit; font-size: 12px;
+      margin-top: 6px; margin-bottom: 8px; outline: none;
+    }
+    #audit-input:focus { border-color: #00f0ff; }
+    .audit-actions { display: flex; gap: 6px; }
+    .btn-primary {
+      flex: 2; background: #0284c7; color: #fff;
+      border: 1px solid #38bdf8; border-radius: 4px;
+      padding: 6px 10px; font-family: inherit; font-size: 11px;
+      font-weight: bold; cursor: pointer; transition: 0.15s;
+    }
+    .btn-primary:hover { background: #0369a1; border-color: #00f0ff; }
+    .btn-preset {
+      flex: 1; background: #0f172a; color: #94a3b8;
+      border: 1px solid #1e293b; border-radius: 4px;
+      padding: 6px 6px; font-family: inherit; font-size: 10px;
+      cursor: pointer;
+    }
+    .btn-preset:hover { border-color: #38bdf8; color: #fff; }
+
+    /* Right Live Cracked Ticker Panel (Option 2) */
+    #hud-right {
+      position: absolute; top: 16px; right: 16px; width: 330px;
+      background: rgba(8, 12, 20, 0.88);
+      border: 1px solid #1e293b; border-right: 4px solid #00f0ff;
+      padding: 14px 16px; border-radius: 6px;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.12);
+      backdrop-filter: blur(6px);
+      z-index: 10;
+    }
+    #crack-list {
+      margin-top: 8px; max-height: 360px; overflow-y: hidden;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .crack-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(15, 23, 42, 0.75);
+      border-left: 2px solid #00f0ff;
+      padding: 5px 8px; border-radius: 3px; font-size: 11px;
+    }
+    .crack-plain { color: #34d399; font-weight: bold; font-size: 12px; }
+    .crack-hash { color: #64748b; font-size: 10px; }
+    .crack-time { color: #00f0ff; font-weight: bold; }
+    #spark-canvas {
+      width: 100%; height: 48px; margin-top: 8px;
+      background: #060911; border: 1px solid #1e293b; border-radius: 3px;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+  <!-- LEFT HUD: TELEMETRY & SLICE SELECTOR -->
+  <div id="hud-left">
+    <div class="hud-title">
+      <span>THERMODYNAMIC ORGANISM</span>
+      <span class="badge" id="ws-status">CONNECTING</span>
+    </div>
+    <div class="metric-row"><span>STATE / WAVE:</span><span class="metric-val val-cyan" id="m-state">INIT</span></div>
+    <div class="metric-row"><span>WAVE STOPWATCH:</span><span class="metric-val val-green" id="m-elapsed">0.00s</span></div>
+    <div class="metric-row"><span>WAVE EVALUATIONS:</span><span class="metric-val" id="m-evals">0</span></div>
+    <div class="metric-row"><span>ACTIVE ENTROPY:</span><span class="metric-val val-cyan" id="m-entropy">0.000 bits</span></div>
+    <div class="metric-row"><span>SYSTEM TEMP:</span><span class="metric-val val-amber" id="m-temp">1.00 K</span></div>
+    <div class="metric-row"><span>ANNEALED ROWS:</span><span class="metric-val" id="m-frozen">0</span></div>
+
+    <canvas id="spark-canvas" width="340" height="48"></canvas>
+
+    <div class="slice-bar">
+      <div class="slice-label">3D TENSOR POSITIONAL SLICE VIEW:</div>
+      <div class="slice-btns" id="slice-btn-group">
+        <button class="slice-btn active" onclick="selectSlice(-1, this)">MAX</button>
+        <button class="slice-btn" onclick="selectSlice(0, this)">P0→1</button>
+        <button class="slice-btn" onclick="selectSlice(1, this)">P1→2</button>
+        <button class="slice-btn" onclick="selectSlice(2, this)">P2→3</button>
+        <button class="slice-btn" onclick="selectSlice(3, this)">P3→4</button>
+        <button class="slice-btn" onclick="selectSlice(4, this)">P4→5</button>
+        <button class="slice-btn" onclick="selectSlice(5, this)">P5→6</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM-LEFT HUD: INTERACTIVE PASSWORD POLICY AUDITOR -->
+  <div id="auditor-panel">
+    <div class="hud-title" style="margin-bottom: 4px;">
+      <span>PASSWORD POLICY AUDITOR</span>
+      <span class="badge">4–8 CHARS</span>
+    </div>
+    <div style="font-size: 10px; color: #94a3b8;">
+      Inject custom comma-separated targets to audit structural resilience:
+    </div>
+    <input id="audit-input" type="text" value="cyb3r11!, cyb3r12!, h4ck99#, r00t12$" />
+    <div class="audit-actions">
+      <button class="btn-primary" onclick="submitAuditWave()">⚡ LAUNCH AUDIT WAVE</button>
+      <button class="btn-preset" onclick="loadPreset('l33t')">L33t Set</button>
+      <button class="btn-preset" onclick="loadPreset('corp')">Corp Set</button>
+    </div>
+  </div>
+
+  <!-- RIGHT HUD: LIVE SOLVED HASH TICKER -->
+  <div id="hud-right">
+    <div class="hud-title">
+      <span>LIVE CRACKED TELEMETRY</span>
+      <span class="badge" id="crack-count">0 HITS</span>
+    </div>
+    <div id="crack-list">
+      <div style="color:#64748b; font-size:11px;">Waiting for SHA-256 collisions...</div>
+    </div>
+  </div>
+
+  <script>
+    const GRID = 95;
+    let ws = null;
+    let entropyHistory = [];
+    let totalHits = 0;
+
+    // Three.js Scene Setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05070b);
+    scene.fog = new THREE.FogExp2(0x05070b, 0.006);
+
+    const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 78, 92);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.set(0, 4, 0);
+
+    // Subtle Lighting
+    scene.add(new THREE.AmbientLight(0x1e293b, 1.4));
+    const dirLight = new THREE.DirectionalLight(0x00f0ff, 1.2);
+    dirLight.position.set(40, 90, 50);
+    scene.add(dirLight);
+
+    // InstancedMesh 95x95 Lattice
+    const geom = new THREE.BoxGeometry(0.76, 1.0, 0.76);
+    geom.translate(0, 0.5, 0);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: 0.25, metalness: 0.65
+    });
+    const mesh = new THREE.InstancedMesh(geom, mat, GRID * GRID);
+    scene.add(mesh);
+
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    const currentHeights = new Float32Array(GRID * GRID).fill(0.2);
+
+    // Initialize Grid Positions
+    let idx = 0;
+    const offset = (GRID - 1) / 2;
+    for (let r = 0; r < GRID; r++) {
+      for (let c = 0; c < GRID; c++) {
+        dummy.position.set(c - offset, 0, r - offset);
+        dummy.scale.set(1, 0.2, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(idx, dummy.matrix);
+        color.setHSL(0.58, 0.85, 0.12);
+        mesh.setColorAt(idx, color);
+        idx++;
+      }
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+
+    function drawSparkline() {
+      const canvas = document.getElementById('spark-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (entropyHistory.length < 2) return;
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      const minH = 1.5, maxH = 5.0;
+      for (let i = 0; i < entropyHistory.length; i++) {
+        const x = (i / (60 - 1)) * canvas.width;
+        const norm = Math.max(0, Math.min(1, (entropyHistory[i] - minH) / (maxH - minH)));
+        const y = canvas.height - (norm * (canvas.height - 8)) - 4;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    function updateCrackedFeed(cracks) {
+      if (!cracks || !cracks.length) return;
+      const container = document.getElementById('crack-list');
+      document.getElementById('crack-count').textContent = `${cracks.length} RECENT`;
+      container.innerHTML = cracks.map(item => `
+        <div class="crack-item">
+          <div>
+            <span class="crack-plain">${item.plaintext}</span>
+            <span class="crack-hash">[${item.hash_prefix}…]</span>
+          </div>
+          <div>
+            <span class="badge" style="margin-right:4px;">${item.wave}</span>
+            <span class="crack-time">${item.time}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function connectWebSocket() {
+      ws = new WebSocket('ws://localhost:8765');
+      const badge = document.getElementById('ws-status');
+
+      ws.onopen = () => {
+        badge.textContent = 'LIVE 25FPS';
+        badge.style.color = '#34d399';
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const w = data.weights;
+        const rep = data.report;
+
+        document.getElementById('m-state').textContent = rep.state;
+        document.getElementById('m-elapsed').textContent = (rep.wave_elapsed || 0).toFixed(2) + 's';
+        document.getElementById('m-evals').textContent = (rep.evals || 0).toLocaleString();
+        document.getElementById('m-entropy').textContent = rep.mean_entropy_bits.toFixed(3) + ' bits';
+        document.getElementById('m-temp').textContent = rep.system_temp.toFixed(2) + ' K';
+        document.getElementById('m-frozen').textContent = rep.frozen_rows_reheated;
+
+        entropyHistory.push(rep.mean_entropy_bits);
+        if (entropyHistory.length > 60) entropyHistory.shift();
+        drawSparkline();
+        updateCrackedFeed(rep.recent_cracks);
+
+        let i = 0;
+        const maxRows = Math.min(GRID, w.length);
+        for (let r = 0; r < maxRows; r++) {
+          const row = w[r];
+          const maxCols = Math.min(GRID, row.length);
+          for (let c = 0; c < maxCols; c++) {
+            const val = row[c];
+            const targetH = 0.2 + Math.pow(val, 0.85) * 28.0;
+            currentHeights[i] += (targetH - currentHeights[i]) * 0.35;
+
+            dummy.position.set(c - offset, 0, r - offset);
+            dummy.scale.set(1, currentHeights[i], 1);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(i, dummy.matrix);
+
+            if (val > 0.08) {
+              // Electric Blue to Cyan to White-Hot peak
+              const hue = 0.54 - Math.min(0.12, val * 0.12);
+              const light = Math.min(0.85, 0.22 + val * 0.65);
+              color.setHSL(hue, 0.95, light);
+            } else {
+              color.setHSL(0.60, 0.65, 0.08);
+            }
+            mesh.setColorAt(i, color);
+            i++;
+          }
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.instanceColor.needsUpdate = true;
+      };
+
+      ws.onclose = () => {
+        badge.textContent = 'RECONNECTING';
+        badge.style.color = '#fbbf24';
+        setTimeout(connectWebSocket, 1000);
+      };
+    }
+
+    function selectSlice(sliceIdx, btnEl) {
+      document.querySelectorAll('.slice-btn').forEach(b => b.classList.remove('active'));
+      btnEl.classList.add('active');
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'SELECT_SLICE', slice: sliceIdx }));
+      }
+    }
+
+    function submitAuditWave() {
+      const raw = document.getElementById('audit-input').value;
+      const targets = raw.split(',').map(s => s.trim()).filter(Boolean);
+      if (ws && ws.readyState === WebSocket.OPEN && targets.length > 0) {
+        ws.send(JSON.stringify({ type: 'CUSTOM_AUDIT', targets: targets }));
+      }
+    }
+
+    function loadPreset(mode) {
+      const input = document.getElementById('audit-input');
+      if (mode === 'l33t') {
+        input.value = 'cyb3r11!, cyb3r12!, h4ck99#, r00t11$, r00t12$';
+      } else {
+        input.value = 'adm1n26!, adm1n25!, v1ct0r1@, ch1sh0lm';
+      }
+      submitAuditWave();
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    connectWebSocket();
+    animate();
+  </script>
+</body>
+</html>

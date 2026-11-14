@@ -1,0 +1,120 @@
+# Rayhunter — single-folder / exhibit run (minimal CASTNET & prior-report bleed)
+# Usage:
+#   python main.py --config config.capture_only.yaml --dir "C:\Users\Jessum Fellow\Desktop\raymum4\20.10.26"
+
+output_dir: "C:/RH/reports and maps"
+
+cross_session:
+  enabled: false
+  reports_dir: "C:/RH/reports and maps"
+  load_from_cwd: false
+
+analysis:
+  scope: capture_only
+
+network:
+  mcc: "505"
+  mnc: "001"
+  mnc_telstra:  "001"
+  mnc_vodafone: "003"
+  country: "AU"
+
+opencellid:
+  enabled:    true
+  api_key:    "REDACTED_API_KEY"
+  cache_days: 7
+
+intelligence:
+  db_path: "intelligence/db"
+
+detection:
+
+  identity_harvest:
+    window_seconds: 120
+    max_requests:   2
+    flag_imeisv:    true
+
+  cipher_downgrade:
+    flag_eea0: true
+    flag_eia0: true
+    flag_a5_0: true
+
+  rrc_periodicity:
+    cycle_seconds:       210.2
+    tolerance_seconds:   15.0
+    min_observations:    3
+    sd_threshold_ms:     200
+    harris_t1_seconds:   610.6
+    harris_t1_tolerance: 5.0
+
+  rogue_tower:
+    cross_carrier_gap_seconds: 1.0
+    min_rogue_cid_events:      2
+    known_rogue_cids:
+      - "137713155"
+      - "137713165"
+      - "137713175"
+      - "137713195"
+      - "8666381"
+      - "8666391"
+      - "8666411"
+    known_rogue_enbs:
+      - 537942
+      - 33853
+    watchlist_cids:
+      - "21940490"
+      - "21940538"
+      - "22204731"
+      - "22204763"
+
+  earfcn_anomaly:
+    flag_nonstandard: true
+    known_rogue_earfcns:
+      - 16384
+
+  paging_target:
+    min_pages_to_analyse:     50
+    critical_page_count:     150
+    base_quantum_seconds:     10.880
+    base_window_lo:            9.0
+    base_window_hi:           13.0
+    base_count_for_confirmed: 40
+    sd_for_confirmed:          2.0
+    top_n_targets:             8
+
+  cid_rotation:
+    min_cids_for_rotation:    3
+    min_events_per_cid:       3
+    rotation_window_seconds:  7200
+    suffix_step_threshold:    50
+    min_transitions:          4
+    exclude_same_enb:         true
+
+  proximity_track:
+    spike_threshold_db:    15.0
+    extreme_rsrp_dbm:     -85.0
+    sustained_rsrp_dbm:   -95.0
+    sustained_min_events:   3
+    multi_cid_min:          2
+    multi_cid_rsrp_dbm:  -100.0
+    multi_cid_window_s:   120.0
+
+  heuristic_scorer:
+    imeisv_min_events:              2
+    eea0_max_for_transparent_proxy: 0
+    persistence_days_professional:  90
+    persistence_days_harris:       300
+
+reporting:
+  severity_levels:     ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+  min_severity:        "LOW"
+  include_raw_events:  false
+  timestamp_format:    "%Y-%m-%d %H:%M:%S UTC"
+
+hardware_fingerprint:
+  confidence_threshold:             0.3
+  harris_t1_seconds:               610.6
+  harris_t1_tolerance_seconds:       5.0
+  harris_persistence_threshold_days: 300
+
+bug_report_dir: "C:/RH/BugReports"

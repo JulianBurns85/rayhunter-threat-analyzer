@@ -1,0 +1,165 @@
+# =============================================================================
+# Rayhunter Threat Analyzer -- Configuration
+# =============================================================================
+# v2.7 -- 26 Jun 2026: INTEGRITY CORRECTIONS
+#   - known_rogue_cids: removed eNB 32849 CIDs (8409357/367/387/397).
+#     ECI decomposition + capture analysis confirmed these are LEGITIMATE
+#     Vodafone macro sectors. They were causing false DUAL CONFIRMATION findings.
+#   - known_rogue_cids: added eNB 33853 CIDs (8666381/391/411).
+#     OpenCelliD lookup: "Cell not found" (zero global observations).
+#     These are the post-ACMA cluster, TAC=30336, Vodafone mask.
+#   - known_rogue_enbs: added eNB 33853. Removed eNB 32849 (confirmed legit).
+#   - watchlist_cids: removed eNB 32849 CIDs (confirmed legitimate — no point
+#     watching legitimate infrastructure).
+#   - Fixed malformed YAML (duplicate known_rogue_enbs key from v2.6 paste error).
+#
+# v2.6 -- 17 Jun 2026: added CID 22204731 to watchlist
+# v2.5 -- 12 Jun 2026: INTEGRITY CORRECTION PASS (see notes below)
+# =============================================================================
+
+# JSON / HTML / KML output directory (created if missing). Uncomment to redirect:
+# output_dir: "C:/RH/reports and maps"
+
+network:
+  mcc: "505"           # Australia
+  mnc: "001"           # Telstra AU (Rayhunter runs on Telstra SIM)
+  mnc_telstra:  "001"
+  mnc_vodafone: "003"
+  country: "AU"
+  # ---------------------------------------------------------------------------
+  # NOTE: TAC=30336 / eNB 32849 is confirmed Vodafone (MNC=03) based on capture
+  # evidence — PLMN decoded in SIB1 shows MCC=505 / MNC=03 for those cells.
+  # This is independent of which carrier the Rayhunter SIM is on.
+  # ---------------------------------------------------------------------------
+
+opencellid:
+  enabled:    true
+  api_key:    "REDACTED_API_KEY"
+  cache_days: 7
+  # Use mnc=001 for Telstra lookups, mnc=003 for Vodafone lookups.
+  # Do NOT mix — querying wrong MNC returns false "not found" results.
+
+intelligence:
+  db_path: "intelligence/db"
+
+detection:
+
+  identity_harvest:
+    window_seconds: 120
+    max_requests:   2
+    flag_imeisv:    true
+
+  cipher_downgrade:
+    flag_eea0: true
+    flag_eia0: true
+    flag_a5_0: true
+
+  rrc_periodicity:
+    cycle_seconds:       210.2
+    tolerance_seconds:   15.0
+    min_observations:    3
+    sd_threshold_ms:     200
+    harris_t1_seconds:   610.6
+    harris_t1_tolerance: 5.0
+
+  rogue_tower:
+    cross_carrier_gap_seconds: 1.0
+    min_rogue_cid_events:      2
+    # -------------------------------------------------------------------------
+    # known_rogue_cids: CONFIRMED rogue cells only. A CID earns confirmation by
+    # exhibiting (keyed to its ECI/PCI/EARFCN):
+    #   - redirectedCarrierInfo (forced downgrade), OR
+    #   - EEA0/EIA0 actually SELECTED in a SecurityModeCommand, OR
+    #   - IMSI (not IMEISV) Identity Request before security, OR
+    #   - NAS Authentication Reject / Attach Reject / TAU Reject.
+    # List membership alone is NOT confirmation.
+    # -------------------------------------------------------------------------
+    known_rogue_cids:
+      # eNB 537942, TAC=12385, Telstra mask (Harris HailStorm PROBABLE)
+      # CONFIRMED: 5 pre-security IMSI requests (1781427776.qmdl, 29.qmdl)
+      # Triple-confirmed: Rayhunter + tshark + Shannon IMS parser
+      - "137713155"   # sector 3  — TRIPLE CONFIRMED (CASTNET x86)
+      - "137713165"   # sector 13 — TRIPLE CONFIRMED (CASTNET x698)
+      - "137713175"   # sector 23 — TRIPLE CONFIRMED (CASTNET x74)
+      - "137713195"   # sector 43 — TRIPLE CONFIRMED (CASTNET x156)
+      # eNB 33853, TAC=30336, Vodafone mask — POST-ACMA CLUSTER
+      # CONFIRMED: OpenCelliD "Cell not found" (zero global observations, 26 Jun 2026)
+      # Appeared in corpus after ACMA field inspection (8 May 2026)
+      - "8666381"     # sector 13 — OpenCelliD NOT FOUND
+      - "8666391"     # sector 23 — OpenCelliD NOT FOUND
+      - "8666411"     # sector 43 — OpenCelliD NOT FOUND
+
+    known_rogue_enbs:
+      - 537942    # TAC=12385, Telstra mask — Harris HailStorm PROBABLE
+      - 33853     # TAC=30336, Vodafone mask — post-ACMA cluster, OpenCelliD NOT FOUND
+
+    # -------------------------------------------------------------------------
+    # REMOVED FROM known_rogue_cids (26 Jun 2026 integrity correction):
+    #   eNB 32849 CIDs: 8409357, 8409367, 8409387, 8409397
+    #   Reason: ECI decomposition + capture analysis confirmed these are LEGITIMATE
+    #   Vodafone macro sectors (eNB 32849, TAC=30336, MNC=03). They were producing
+    #   false DUAL CONFIRMATION findings in CrossSourceCorrelator.
+    #   Do NOT re-add without byte-level attack behaviour evidence.
+    # -------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
+    # watchlist_cids: INFO-only leads. Seen in captures but not yet confirmed
+    # as rogue by behaviour. Detectors treat hits as INFO, never >= MEDIUM.
+    # -------------------------------------------------------------------------
+    watchlist_cids:
+      - "21940490"    # eNB 85705 sector 10 — neighbour, Telstra
+      - "21940538"    # eNB 85705 sector 58 — neighbour, Telstra
+      - "22204731"    # eNB 86737 sector 59 — TAC=53360 PLMN=505-02, 3 obs/0.341s Jun 11, OpenCelliD=NOT FOUND
+      - "22204763"    # related cluster
+
+  earfcn_anomaly:
+    flag_nonstandard: true
+    known_rogue_earfcns:
+      - 16384   # VERIFY: confirm outside all 3GPP TS 36.101 Table 5.7.3-1 band entries
+
+  paging_target:
+    min_pages_to_analyse:     50
+    critical_page_count:     150
+    base_quantum_seconds:     10.880
+    base_window_lo:            9.0
+    base_window_hi:           13.0
+    base_count_for_confirmed: 40
+    sd_for_confirmed:          2.0
+    top_n_targets:             8
+
+  cid_rotation:
+    min_cids_for_rotation:    3
+    min_events_per_cid:       3
+    rotation_window_seconds:  7200
+    suffix_step_threshold:    50
+    min_transitions:          4
+    exclude_same_enb:         true
+
+  proximity_track:
+    spike_threshold_db:    15.0
+    extreme_rsrp_dbm:     -85.0
+    sustained_rsrp_dbm:   -95.0
+    sustained_min_events:   3
+    multi_cid_min:          2
+    multi_cid_rsrp_dbm:  -100.0
+    multi_cid_window_s:   120.0
+
+  heuristic_scorer:
+    imeisv_min_events:              2
+    eea0_max_for_transparent_proxy: 0
+    persistence_days_professional:  90
+    persistence_days_harris:       300
+
+reporting:
+  severity_levels:     ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+  min_severity:        "LOW"
+  include_raw_events:  false
+  timestamp_format:    "%Y-%m-%d %H:%M:%S UTC"
+
+hardware_fingerprint:
+  confidence_threshold:             0.3
+  harris_t1_seconds:               610.6
+  harris_t1_tolerance_seconds:       5.0
+  harris_persistence_threshold_days: 300
+
+bug_report_dir: "C:/RH/BugReports"

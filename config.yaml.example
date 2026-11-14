@@ -1,0 +1,47 @@
+# Copy to config.yaml and set opencellid.api_key (or use config_local.yaml, gitignored).
+
+# output_dir: "C:/RH/reports and maps"
+
+# Cross-session detectors (persistence, regulatory corpus) read prior JSON reports from:
+# cross_session:
+#   enabled: true
+#   reports_dir: "C:/RH/reports and maps"   # recommended — avoids repo CWD bleed
+#   load_from_cwd: false                    # set true only to scan ./rayhunter_report_*.json
+
+network:
+  mcc: "505"
+  mnc: "001"
+  mnc_telstra: "001"
+  mnc_vodafone: "003"
+  country: "AU"
+
+opencellid:
+  enabled: true
+  api_key: "YOUR_OPENCELLID_KEY"
+  cache_days: 7
+
+intelligence:
+  db_path: "intelligence/db"
+
+castnet_api_url: null
+
+detection:
+  identity_harvest:
+    window_seconds: 120
+    max_requests: 2
+    flag_imeisv: true
+  cipher_downgrade:
+    flag_eea0: true
+    flag_eia0: true
+    flag_a5_0: true
+  rogue_tower:
+    known_rogue_cids: []
+    known_rogue_enbs: []
+    watchlist_cids: []
+
+reporting:
+  severity_levels: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+  min_severity: "LOW"
+  include_raw_events: false
+
+bug_report_dir: "C:/RH/BugReports"

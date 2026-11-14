@@ -1,0 +1,7 @@
+Category,Metric,Count
+Identity Request,Generic Identity Request,7
+Parser Gap,Encrypted NAS Message (Skipped),493643
+Parser Gap,Other Parser Gap,167100
+Parser Gap,Incomplete NAS Message (NeedSize),38391
+Parser Gap,ServingCellTiming Zero-Record Assertion,127
+Parser Gap,Unsupported LTE MAC Framed,140

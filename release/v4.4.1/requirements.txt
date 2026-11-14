@@ -1,0 +1,21 @@
+# Rayhunter Threat Analyzer — runtime dependencies
+# Python 3.10+ required (see setup.py)
+
+pyyaml>=6.0
+requests>=2.28.0
+rich>=13.0.0
+pyshark>=0.6.0
+python-dateutil>=2.8.2
+nest-asyncio>=1.5.0
+scapy>=2.5.0
+
+# Optional: CASTNET web helpers
+# flask>=2.3.0
+# flask-cors>=4.0.0
+
+# Optional: PyQt6 GUI (gui.py)
+# PyQt6>=6.5.0
+
+# Optional: QMDL via pySCAT / signalcat (install separately per docs/INSTALL.md)
+# Development / CI
+pytest>=7.0.0

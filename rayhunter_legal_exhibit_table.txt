@@ -1,0 +1,207 @@
+============================================================
+ FORMAL FORENSIC EXHIBIT TABLE — BALACLAVA INVESTIGATION
+ Subject Location: 27 Nightingale Street, Balaclava VIC 3183
+============================================================
+
+No.  Timestamp(s)       Protocol / Event Description
+------------------------------------------------------------
+  1  479 3411.767000    127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 153    Attach request, PDN connectivity request
+  2  483 3411.819000    127.0.0.1             127.0.0.1             LTE RRC UL_DCCH/NAS-EPS 160    RRCConnectionSetupComplete, Attach request, PDN connectivity request
+  3  485 3411.862000    127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 47     Identity request
+  4  864 27595.813000   127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 153    Attach request, PDN connectivity request
+  5  868 27595.852000   127.0.0.1             127.0.0.1             LTE RRC UL_DCCH/NAS-EPS 160    RRCConnectionSetupComplete, Attach request, PDN connectivity request
+  6  870 27595.910000   127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 47     Identity request
+  7  1378 38704.014000   127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 153    Attach request, PDN connectivity request
+  8  1383 38704.064000   127.0.0.1             127.0.0.1             LTE RRC UL_DCCH/NAS-EPS 160    RRCConnectionSetupComplete, Attach request, PDN connectivity request
+  9  1385 38704.112000   127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 80     Authentication request
+ 10  1992 39439.520000   127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 153    Attach request, PDN connectivity request
+ 11  1996 39439.575000   127.0.0.1             127.0.0.1             LTE RRC UL_DCCH/NAS-EPS 160    RRCConnectionSetupComplete, Attach request, PDN connectivity request
+ 12  1998 39439.628000   127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 47     Identity request
+ 13  2639 41529.286000   127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 153    Attach request, PDN connectivity request
+ 14  2643 41529.346000   127.0.0.1             127.0.0.1             LTE RRC UL_DCCH/NAS-EPS 160    RRCConnectionSetupComplete, Attach request, PDN connectivity request
+ 15  2645 41529.405000   127.0.0.1             127.0.0.1             GSMTAP/NAS-EPS 47     Identity request
+ 16  10-04 18:22:11.539 10199  4085  4700 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 17  10-04 18:22:11.547 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=518) and and position 3
+ 18  10-04 18:22:11.548 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@1fe01d
+ 19  10-04 18:22:11.549 10199  4085  4700 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 20  10-04 18:22:11.555 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+ 21  10-04 18:22:11.555 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=518), load size: 60
+ 22  10-04 18:22:11.555 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+ 23  10-04 18:22:11.555 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=518), idx: 3, adjustOdd: 0, start: 0, end: 33
+ 24  10-04 18:22:11.555 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 128, limit: 64
+ 25  10-04 18:22:11.555 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=518), load size: 60
+ 26  10-04 18:22:11.555 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097550549, id=16631, partId=0}, version=518), beforeCount: 0, afterCount: 95
+ 27  10-04 18:22:11.555 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+ 28  10-04 18:22:11.780 10199  4085  4698 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 29  10-04 18:22:11.783 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=520) and and position 3
+ 30  10-04 18:22:11.783 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@450438e
+ 31  10-04 18:22:11.784 10199  4085  4699 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 32  10-04 18:22:11.867 10199  4085  4699 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 33  10-04 18:22:11.868 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=521) and and position 3
+ 34  10-04 18:22:11.868 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@5e884f9
+ 35  10-04 18:22:11.869 10199  4085  4627 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 36  10-04 18:22:11.967 10199  4085  4698 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 37  10-04 18:22:11.967 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=521) and and position 3
+ 38  10-04 18:22:11.967 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@9b7e86d
+ 39  10-04 18:22:11.968 10199  4085  4700 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 40  10-04 18:22:12.288 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+ 41  10-04 18:22:12.289 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=521), load size: 60
+ 42  10-04 18:22:12.289 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+ 43  10-04 18:22:12.289 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=521), idx: 3, adjustOdd: 0, start: 0, end: 33
+ 44  10-04 18:22:12.289 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 128, limit: 64
+ 45  10-04 18:22:12.290 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=521), load size: 60
+ 46  10-04 18:22:12.290 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097550549, id=16631, partId=0}, version=521), beforeCount: 0, afterCount: 95
+ 47  10-04 18:22:12.290 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+ 48  10-04 18:22:12.696 10199  4085  4702 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 49  10-04 18:22:12.696 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=522) and and position 3
+ 50  10-04 18:22:12.699 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@117707b
+ 51  10-04 18:22:12.700 10199  4085  4700 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 52  10-04 18:22:12.702 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+ 53  10-04 18:22:12.702 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=522), load size: 60
+ 54  10-04 18:22:12.702 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+ 55  10-04 18:22:12.703 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=522), idx: 3, adjustOdd: 0, start: 0, end: 33
+ 56  10-04 18:22:12.703 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 128, limit: 64
+ 57  10-04 18:22:12.704 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=522), load size: 60
+ 58  10-04 18:22:12.704 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097550549, id=16631, partId=0}, version=522), beforeCount: 0, afterCount: 95
+ 59  10-04 18:22:12.705 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+ 60  10-04 18:22:47.774 10199  4085  4698 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 61  10-04 18:22:47.778 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=2}, version=523) and and position 2
+ 62  10-04 18:22:47.779 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@251d675
+ 63  10-04 18:22:47.779 10199  4085  4700 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 64  10-04 18:22:47.783 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+ 65  10-04 18:22:47.783 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=2}, version=523), load size: 60
+ 66  10-04 18:22:47.783 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+ 67  10-04 18:22:47.783 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=2}, version=523), idx: 2, adjustOdd: 0, start: 0, end: 32
+ 68  10-04 18:22:47.784 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 32], total message count: 129, limit: 64
+ 69  10-04 18:22:47.784 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=2}, version=523), load size: 60
+ 70  10-04 18:22:47.784 10199  4085  4085 I MessageListPagingSource: got 32 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097645699, id=16633, partId=0}, version=523), beforeCount: 0, afterCount: 97
+ 71  10-04 18:22:47.784 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+ 72  10-04 18:22:48.120 10199  4085  4627 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 73  10-04 18:22:48.129 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=525) and and position 3
+ 74  10-04 18:22:48.130 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@25f757c
+ 75  10-04 18:22:48.131 10199  4085  4627 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 76  10-04 18:22:48.233 10199  4085  4699 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 77  10-04 18:22:48.236 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=526) and and position 3
+ 78  10-04 18:22:48.237 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@c6d5862
+ 79  10-04 18:22:48.237 10199  4085  4699 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 80  10-04 18:22:48.341 10199  4085  4698 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 81  10-04 18:22:48.341 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=526) and and position 3
+ 82  10-04 18:22:48.342 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@5159d29
+ 83  10-04 18:22:48.343 10199  4085  4699 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 84  10-04 18:22:48.546 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+ 85  10-04 18:22:48.547 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=526), load size: 60
+ 86  10-04 18:22:48.547 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+ 87  10-04 18:22:48.548 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=526), idx: 3, adjustOdd: 0, start: 0, end: 33
+ 88  10-04 18:22:48.549 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 129, limit: 64
+ 89  10-04 18:22:48.550 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=526), load size: 60
+ 90  10-04 18:22:48.550 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097607024, id=16632, partId=0}, version=526), beforeCount: 0, afterCount: 96
+ 91  10-04 18:22:48.550 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+ 92  10-04 18:22:49.127 10199  4085  4453 I MessageListPagingSource: Invalidating pagingSource due to data change
+ 93  10-04 18:22:49.127 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=527) and and position 3
+ 94  10-04 18:22:49.129 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@fa13449
+ 95  10-04 18:22:49.130 10199  4085  4698 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+ 96  10-04 18:22:49.131 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+ 97  10-04 18:22:49.131 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=527), load size: 60
+ 98  10-04 18:22:49.131 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+ 99  10-04 18:22:49.131 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=527), idx: 3, adjustOdd: 0, start: 0, end: 33
+100  10-04 18:22:49.131 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 129, limit: 64
+101  10-04 18:22:49.132 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=527), load size: 60
+102  10-04 18:22:49.132 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097607024, id=16632, partId=0}, version=527), beforeCount: 0, afterCount: 96
+103  10-04 18:22:49.132 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+104  10-04 18:22:58.439 10199  4085  4702 I MessageListPagingSource: Invalidating pagingSource due to data change
+105  10-04 18:22:58.440 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=529) and and position 3
+106  10-04 18:22:58.441 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@9f91a80
+107  10-04 18:22:58.442 10199  4085  4699 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+108  10-04 18:22:58.443 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+109  10-04 18:22:58.443 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=529), load size: 60
+110  10-04 18:22:58.444 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+111  10-04 18:22:58.444 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=529), idx: 3, adjustOdd: 0, start: 0, end: 33
+112  10-04 18:22:58.444 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 130, limit: 64
+113  10-04 18:22:58.444 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=529), load size: 60
+114  10-04 18:22:58.445 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097645699, id=16633, partId=0}, version=529), beforeCount: 0, afterCount: 97
+115  10-04 18:22:58.445 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+116  10-04 18:22:58.649 10199  4085  4702 I MessageListPagingSource: Invalidating pagingSource due to data change
+117  10-04 18:22:58.653 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=530) and and position 3
+118  10-04 18:22:58.654 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@a5bbe5b
+119  10-04 18:22:58.655 10199  4085  4627 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+120  10-04 18:22:58.759 10199  4085  4627 I MessageListPagingSource: Invalidating pagingSource due to data change
+121  10-04 18:22:58.759 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=530) and and position 3
+122  10-04 18:22:58.759 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@f95e7d1
+123  10-04 18:22:58.761 10199  4085  4699 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+124  10-04 18:22:59.195 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+125  10-04 18:22:59.196 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=530), load size: 60
+126  10-04 18:22:59.196 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+127  10-04 18:22:59.196 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=530), idx: 3, adjustOdd: 0, start: 0, end: 33
+128  10-04 18:22:59.196 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 130, limit: 64
+129  10-04 18:22:59.197 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=530), load size: 60
+130  10-04 18:22:59.197 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097645699, id=16633, partId=0}, version=530), beforeCount: 0, afterCount: 97
+131  10-04 18:22:59.197 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+132  10-04 18:23:03.163 10199  4085  4698 I MessageListPagingSource: Invalidating pagingSource due to data change
+133  10-04 18:23:03.169 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=531) and and position 3
+134  10-04 18:23:03.170 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@21cb7
+135  10-04 18:23:03.171 10199  4085  4700 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+136  10-04 18:23:03.182 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+137  10-04 18:23:03.182 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=531), load size: 60
+138  10-04 18:23:03.182 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+139  10-04 18:23:03.182 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=531), idx: 3, adjustOdd: 0, start: 0, end: 33
+140  10-04 18:23:03.182 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 131, limit: 64
+141  10-04 18:23:03.183 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=531), load size: 60
+142  10-04 18:23:03.183 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097700611, id=16634, partId=0}, version=531), beforeCount: 0, afterCount: 98
+143  10-04 18:23:03.183 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+144  10-04 18:23:03.408 10199  4085  4698 I MessageListPagingSource: Invalidating pagingSource due to data change
+145  10-04 18:23:03.413 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=533) and and position 3
+146  10-04 18:23:03.415 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@e1da5ee
+147  10-04 18:23:03.415 10199  4085  4700 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+148  10-04 18:23:03.534 10199  4085  4698 I MessageListPagingSource: Invalidating pagingSource due to data change
+149  10-04 18:23:03.534 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=534) and and position 3
+150  10-04 18:23:03.535 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@b1d0902
+151  10-04 18:23:03.535 10199  4085  4699 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+152  10-04 18:23:03.626 10199  4085  4700 I MessageListPagingSource: Invalidating pagingSource due to data change
+153  10-04 18:23:03.627 10199  4085  4085 I MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=534) and and position 3
+154  10-04 18:23:03.627 10199  4085  4085 I MessageListPagingDataPr: PagingData emitted: syt@b22fe49
+155  10-04 18:23:03.628 10199  4085  4700 I LogEmissionsKt: MessageListPagingData emitted: redacted-pii[55-chars]
+156  10-04 18:23:03.902 10199  4085  4085 I MessageListPagingSource: computed limit: 64
+157  10-04 18:23:03.902 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=534), load size: 60
+158  10-04 18:23:03.902 10199  4085  4085 I MessageListPagingSource: Refresh loading messages
+159  10-04 18:23:03.903 10199  4085  4085 I MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=534), idx: 3, adjustOdd: 0, start: 0, end: 33
+160  10-04 18:23:03.903 10199  4085  4085 I MessageListPagingSource: bounds without extras: [0, 33], total message count: 131, limit: 64
+161  10-04 18:23:03.903 10199  4085  4085 I MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=534), load size: 60
+162  10-04 18:23:03.903 10199  4085  4085 I MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791097700611, id=16634, partId=0}, version=534), beforeCount: 0, afterCount: 98
+163  10-04 18:23:03.903 10199  4085  4085 I MessageListPagingSource: MessageListPagingSource load complete.
+164  10-04 17:45:05.360 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=290) and and position 3
+165  10-04 17:45:05.361 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingDataProviderImpl: PagingData emitted: syt@bac0c17
+166  10-04 17:45:05.361 4085 4627 I com.google.android.apps.messaging.shared.concurrent.flow.FlowEmissionsLogger: MessageListPagingData emitted: redacted-pii[55-chars]
+167  10-04 17:45:05.467 4085 4698 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSourceChangeHandler: Invalidating pagingSource due to data change
+168  10-04 17:45:05.469 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=290) and and position 3
+169  10-04 17:45:05.470 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingDataProviderImpl: PagingData emitted: syt@140e1ed
+170  10-04 17:45:05.470 4085 4702 I com.google.android.apps.messaging.shared.concurrent.flow.FlowEmissionsLogger: MessageListPagingData emitted: redacted-pii[55-chars]
+171  10-04 17:45:05.553 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: computed limit: 64
+172  10-04 17:45:05.553 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=290), load size: 60
+173  10-04 17:45:05.553 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Refresh loading messages
+174  10-04 17:45:05.553 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=290), idx: 3, adjustOdd: 0, start: 0, end: 33
+175  10-04 17:45:05.553 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: bounds without extras: [0, 33], total message count: 78, limit: 64
+176  10-04 17:45:05.554 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=290), load size: 60
+177  10-04 17:45:05.554 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791095222458, id=16587, partId=0}, version=290), beforeCount: 0, afterCount: 45
+178  10-04 17:45:05.554 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: MessageListPagingSource load complete.
+179  10-04 17:45:06.004 4085 4698 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSourceChangeHandler: Invalidating pagingSource due to data change
+180  10-04 17:45:06.005 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=291) and and position 3
+181  10-04 17:45:06.007 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingDataProviderImpl: PagingData emitted: syt@a73d654
+182  10-04 17:45:06.008 4085 4700 I com.google.android.apps.messaging.shared.concurrent.flow.FlowEmissionsLogger: MessageListPagingData emitted: redacted-pii[55-chars]
+183  10-04 17:45:06.009 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: computed limit: 64
+184  10-04 17:45:06.009 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=291), load size: 60
+185  10-04 17:45:06.010 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Refresh loading messages
+186  10-04 17:45:06.010 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=291), idx: 3, adjustOdd: 0, start: 0, end: 33
+187  10-04 17:45:06.010 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: bounds without extras: [0, 33], total message count: 78, limit: 64
+188  10-04 17:45:06.010 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=3}, version=291), load size: 60
+189  10-04 17:45:06.011 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: got 33 messages. prev: null, next: VersionedPagingKey(innerKey=BuglePagingKey{timestamp=1791095222458, id=16587, partId=0}, version=291), beforeCount: 0, afterCount: 45
+190  10-04 17:45:06.011 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: MessageListPagingSource load complete.
+191  10-04 17:45:28.832 4085 4453 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSourceChangeHandler: Invalidating pagingSource due to data change
+192  10-04 17:45:28.840 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Refreshing from key VersionedPagingKey(innerKey=OffsetPagingKey{offset=1}, version=292) and and position 1
+193  10-04 17:45:28.842 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingDataProviderImpl: PagingData emitted: syt@9fb9827
+194  10-04 17:45:28.843 4085 4699 I com.google.android.apps.messaging.shared.concurrent.flow.FlowEmissionsLogger: MessageListPagingData emitted: redacted-pii[55-chars]
+195  10-04 17:45:28.847 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: computed limit: 64
+196  10-04 17:45:28.847 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=1}, version=292), load size: 60
+197  10-04 17:45:28.847 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Refresh loading messages
+198  10-04 17:45:28.847 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: Computing bounds: refresh key: VersionedPagingKey(innerKey=OffsetPagingKey{offset=1}, version=292), idx: 1, adjustOdd: 0, start: 0, end: 31
+199  10-04 17:45:28.847 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: bounds without extras: [0, 31], total message count: 79, limit: 64
+200  10-04 17:45:28.847 4085 4085 I com.google.android.apps.messaging.conversation2.messagelist.paging.MessageListPagingSource: pagingKey: VersionedPagingKey(innerKey=OffsetPagingKey{offset=1}, version=292), load size: 60
