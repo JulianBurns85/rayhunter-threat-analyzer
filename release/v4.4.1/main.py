@@ -928,8 +928,12 @@ def main() -> None:
                 castnet_obs_file=args.castnet_obs,
             )
             fleet_findings = fleet.run()
-            fleet_report_section = fleet.format_report_section(fleet_findings)
-            print(fleet_report_section)
+            print(
+                "Fleet detector summary: "
+                f"signals={fleet_findings.get('signal_count', 0)}, "
+                f"matched={fleet_findings.get('detection_count', 0)}, "
+                f"elevated={fleet_findings.get('elevated_count', 0)}"
+            )
             report["fleet_detections"] = fleet_findings
 
             # Promote forensic flags to top-level report for chain-of-custody
