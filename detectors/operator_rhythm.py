@@ -20,6 +20,7 @@ No commercial or open-source IMSI catcher detector does this.
 
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
+import math
 import statistics
 from typing import List, Dict, Any
 import sys
@@ -27,6 +28,30 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from detectors.base import BaseDetector, make_finding
+
+
+def binom_sf(k: int, n: int, p: float) -> float:
+    """Return P(X >= k) for X ~ Binomial(n, p)."""
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    if not 0 <= p <= 1:
+        raise ValueError("p must be between 0 and 1")
+    if k <= 0:
+        return 1.0
+    if k > n:
+        return 0.0
+    if p == 0:
+        return 0.0
+    if p == 1:
+        return 1.0
+
+    tail = 0.0
+    term = math.comb(n, k) * (p ** k) * ((1.0 - p) ** (n - k))
+    tail += term
+    for i in range(k + 1, n + 1):
+        term *= (n - i + 1) / i * (p / (1.0 - p))
+        tail += term
+    return tail
 
 
 # Key dates for before/after analysis
