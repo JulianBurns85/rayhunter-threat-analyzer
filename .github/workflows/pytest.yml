@@ -1,22 +1,179 @@
-name: Tests
+"""
+time_quality.py (v4.4.3) — tag events whose timestamps cannot be trusted, and say which files.
 
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+Why: parsers anchor "boot-relative" times to file mtime and some QMDL/PCAP time fields are garbage.
+Downstream span/rhythm/persistence maths then reports impossible things (e.g. 549 active days for a
+capture set that starts in October 2026). This does NOT change timestamps; it only sets
+event["timestamp_source"] so forensic_time.trusted_timestamp() can exclude them.
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Run pytest
-        run: pytest tests/ -q --ignore=tests/test_integration.py
+Tags (first match wins; an existing parser-set timestamp_source is preserved):
+  invalid            no parseable/plausible timestamp
+  out_of_window      outside analysis.capture_window [start, end]  (default 2026-01-01 .. 2026-12-31)
+  filename_mismatch  file is named by a Unix start epoch (Rayhunter style, e.g. 1792071242.pcapng) but
+                     the event is more than analysis.max_file_span_days after/before that start
+Config (config.yaml):
+  analysis:
+    capture_window: ["2026-01-01", "2026-12-31"]
+    max_file_span_days: 14
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from forensic_time import normalize_epoch_seconds
+
+
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    """
+    Best-effort conversion to timezone-aware UTC datetime.
+    """
+    if value is None:
+        return None
+
+    try:
+        # Numeric epoch seconds/milliseconds
+        if isinstance(value, (int, float)):
+            val = float(value)
+            # Support millisecond timestamps if very large
+            if abs(val) > 1_000_000_000_000:
+                val /= 1000.0
+            return datetime.fromtimestamp(val, tz=timezone.utc)
+
+        # Strings
+        if isinstance(value, str):
+            s = value.strip()
+            if not s:
+                return None
+
+            # Handle common epoch formats
+            if s.isdigit() or (s.startswith("-") and s[1:].isdigit()):
+                try:
+                    epoch = float(s)
+                    if abs(epoch) > 1_000_000_000_000:
+                        epoch /= 1000.0
+                    return datetime.fromtimestamp(epoch, tz=timezone.utc)
+                except (ValueError, OverflowError, OSError):
+                    pass
+
+            # ISO-like strings
+            s2 = s.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(s2)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+
+        # datetime/date objects
+        if hasattr(value, "timestamp"):
+            dt = value
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+
+        return None
+    except (TypeError, ValueError, OSError, OverflowError):
+        return None
+
+
+def _epoch(ts: Any) -> Optional[float]:
+    """
+    Normalize an event timestamp to UTC epoch seconds.
+    Returns None for unparseable timestamps.
+    """
+    if ts is None:
+        return None
+
+    try:
+        dt = _coerce_datetime(ts)
+        if dt is None:
+            return None
+        return normalize_epoch_seconds(dt.timestamp())
+    except (ValueError, OSError, OverflowError):
+        return None
+
+
+def _name_epoch(source_file: str) -> Optional[float]:
+    """
+    Extract a Unix epoch from a Rayhunter-style filename, e.g.:
+      1792071242.pcapng -> 1792071242
+      29.pcapng -> no match (not a 9-10 digit file epoch)
+    """
+    stem = Path(str(source_file)).stem
+    if stem.isdigit() and 9 <= len(stem) <= 10:
+        return normalize_epoch_seconds(float(stem))
+    return None
+
+
+def audit_and_tag(events: List[Dict], cfg: dict) -> List[Dict]:
+    """
+    Audit events and attach timestamp_source tags when they are untrusted.
+
+    Returns a list of per-file summary rows, as used by print_audit().
+    """
+    a = (cfg or {}).get("analysis", {}) or {}
+    w0, w1 = a.get("capture_window", ["2026-01-01", "2026-12-31"])
+    lo = datetime.fromisoformat(str(w0)).replace(tzinfo=timezone.utc).timestamp()
+    hi = datetime.fromisoformat(str(w1)).replace(tzinfo=timezone.utc).timestamp() + 86400
+    max_span = float(a.get("max_file_span_days", 14)) * 86400
+
+    files: Dict[str, Dict] = {}
+    for e in events:
+        f = str(e.get("source_file", "?"))
+        row = files.setdefault(
+            f,
+            {
+                "file": f,
+                "events": 0,
+                "tagged": 0,
+                "first": None,
+                "last": None,
+                "name_epoch": _name_epoch(f),
+                "tags": {},
+            },
+        )
+        row["events"] += 1
+
+        # Prefer explicit timestamp field, then time, then ts
+        t = _epoch(e.get("timestamp") or e.get("time") or e.get("ts"))
+        tag = None
+
+        if t is None:
+            tag = "invalid"
+        else:
+            row["first"] = t if row["first"] is None else min(row["first"], t)
+            row["last"] = t if row["last"] is None else max(row["last"], t)
+
+            if not (lo <= t <= hi):
+                tag = "out_of_window"
+            elif row["name_epoch"] is not None and not (-3600 <= t - row["name_epoch"] <= max_span):
+                tag = "filename_mismatch"
+
+        # Preserve parser-set timestamps -> first match wins
+        if tag and not e.get("timestamp_source"):
+            e["timestamp_source"] = tag
+            row["tagged"] += 1
+            row["tags"][tag] = row["tags"].get(tag, 0) + 1
+
+    return list(files.values())
+
+
+def print_audit(rows: List[Dict]) -> None:
+    total = sum(r["events"] for r in rows)
+    tagged = sum(r["tagged"] for r in rows)
+    bad = [r for r in rows if r["tagged"]]
+
+    print(
+        f"\n  [TIME] {tagged:,} of {total:,} events "
+        f"({(tagged / total * 100 if total else 0):.1f}%) "
+        f"have untrusted timestamps in {len(bad)} of {len(rows)} files "
+        f"(excluded from span/rhythm maths; timestamps unchanged)."
+    )
+
+    for r in sorted(bad, key=lambda r: -r["tagged"])[:10]:
+        fmt = lambda t: datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d") if t else "?"
+        print(f"    {Path(r['file']).name}: {r['tagged']:,}/{r['events']:,} {r['tags']} "
+              f"range {fmt(r['first'])}..{fmt(r['last'])}")
+
+    if len(bad) > 10:
+        print(f"    ... and {len(bad) - 10} more file(s)")
