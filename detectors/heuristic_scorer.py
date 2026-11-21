@@ -82,6 +82,12 @@ def _extract_count(text: str, min_val: int = 2,
 
 # ---------------------------------------------------------------------------
 
+
+def _is_yaicd_eligible(f) -> bool:
+    sev = str(_get(f, "severity", "") or "").strip().upper()
+    conf = str(_get(f, "confidence", "") or "").strip().upper()
+    return sev not in ("LOW", "INFO", "") and conf != "INFO"
+
 @dataclass
 class HeuristicResult:
     heuristic_id: str
@@ -319,8 +325,9 @@ class HeuristicScorerDetector:
             + fuzzy("imsi request")
             + fuzzy("imsi harvesting")
         )
-        ctx["imeisv_findings"] = imsi_f
-        ctx["imeisv_present"]  = bool(imsi_f)
+        qual_imsi = [f for f in imsi_f if _is_yaicd_eligible(f)]
+        ctx["imeisv_findings"] = qual_imsi
+        ctx["imeisv_present"]  = bool(qual_imsi)
 
         # Count extraction -- integer fields ONLY, no string parsing.
         # String parsing caused year numbers (e.g. 2026 from timestamps)
@@ -353,10 +360,11 @@ class HeuristicScorerDetector:
             + fuzzy("handover")
             + fuzzy("mobilitycontrolinfo")
         )
-        ctx["handover_inject_findings"] = handover_f
+        qual_ho = [f for f in handover_f if _is_yaicd_eligible(f)]
+        ctx["handover_inject_findings"] = qual_ho
         ctx["handover_inject_count"] = sum(
             int(_get(f, "event_count") or _get(f, "count") or 1)
-            for f in handover_f
+            for f in qual_ho
         )
 
         # --- EEA0 / cipher downgrade ----------------------------------------
@@ -482,6 +490,7 @@ class HeuristicScorerDetector:
                 lac_n += 1
         ctx["lac_change_count"] = lac_n
 
+        ctx["has_observations"] = bool(events) or bool(findings)
         return ctx
 
     # -----------------------------------------------------------------------
@@ -595,6 +604,8 @@ class HeuristicScorerDetector:
         )
 
     def _h4_no_forced_downgrade(self, ctx: dict) -> HeuristicResult:
+        if not ctx.get("has_observations", True):
+            return HeuristicResult(heuristic_id="4.1.4", label="No Forced 2G Downgrade", status="NOT_APPLICABLE", evidence="No events or findings available.", academic_source="IMSI Catchers Survey 2015 ?4.1.4")
         """
         4.1.4 -- Forced 2G downgrade absent.
         NOTE: EEA0 on LTE is NOT forced-2G-downgrade.
@@ -651,6 +662,8 @@ class HeuristicScorerDetector:
         )
 
     def _h6_eea0(self, ctx: dict) -> HeuristicResult:
+        if not ctx.get("has_observations", True):
+            return HeuristicResult(heuristic_id="4.1.6", label="EEA0 Null-Cipher", status="NOT_APPLICABLE", evidence="No events or findings available.", academic_source="IMSI Catchers Survey 2015 ?4.1.6")
         """
         4.1.6 -- EEA0 null-cipher.
         CONFIRMS in both directions:
@@ -735,6 +748,8 @@ class HeuristicScorerDetector:
         )
 
     def _h8_traffic_forwarding(self, ctx: dict) -> HeuristicResult:
+        if not ctx.get("has_observations", True):
+            return HeuristicResult(heuristic_id="4.1.8", label="Traffic Forwarding Mode", status="NOT_APPLICABLE", evidence="No events or findings available.", academic_source="IMSI Catchers Survey 2015 ?4.1.8")
         """4.1.8 -- Traffic forwarding mode."""
         eea0_n   = ctx["eea0_count"]
         has_eea0 = eea0_n > 0   # ← consistent with _h6_eea0 fix

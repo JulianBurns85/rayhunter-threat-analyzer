@@ -1,3 +1,4 @@
+﻿from typing import Any
 #!/usr/bin/env python3
 """
 Rogue Tower Detector
@@ -53,77 +54,136 @@ class RogueTowerDetector(BaseDetector):
 
     def __init__(self, cfg: dict):
         super().__init__(cfg)
-        self.mcc = cfg.get("network", {}).get("mcc", "505")
-        self.mnc = cfg.get("network", {}).get("mnc", "001")
+        self.mcc = str(cfg.get("network", {}).get("mcc", "505"))
+        self.mnc = str(cfg.get("network", {}).get("mnc", "001"))
         self.opencellid_cfg = cfg.get("opencellid", {})
+        det_cfg = cfg.get("detection", {})
+        rt_cfg = det_cfg.get("rogue_tower", {}) if isinstance(det_cfg, dict) else {}
+        earfcn_cfg = det_cfg.get("earfcn_anomaly", {}) if isinstance(det_cfg, dict) else {}
+
         self.known_rogue_cells = cfg.get("known_rogue_cells", {})
-        self.known_rogue_earfcns = set(cfg.get("known_rogue_earfcns", []))
+        self.known_rogue_cids = {str(x) for x in (rt_cfg.get("known_rogue_cids") or [])}
+        self.known_rogue_enbs = {int(x) for x in (rt_cfg.get("known_rogue_enbs") or [])}
+        self.watchlist_cids = {str(x) for x in (rt_cfg.get("watchlist_cids") or [])}
+
+        rogue_earfcns = list(cfg.get("known_rogue_earfcns") or []) + list(earfcn_cfg.get("known_rogue_earfcns") or [])
+        self.known_rogue_earfcns = {int(x) for x in rogue_earfcns if x is not None}
         self._cell_cache = self._load_cache()
+
+    def _norm_op_key(self, mcc: str, mnc: str) -> str:
+        mnc_s = str(mnc or self.mnc).strip()
+        if mnc_s in {"1", "01", "001"}:
+            return f"{mcc}-001"
+        if mnc_s in {"3", "03", "003"}:
+            return f"{mcc}-003"
+        if mnc_s in {"6", "06", "006"}:
+            return f"{mcc}-006"
+        return f"{mcc}-{mnc_s}"
+
+    def _op_name_for(self, op_key: str) -> str:
+        if hasattr(self, "_op_name"):
+            try:
+                return self._op_name()
+            except TypeError:
+                pass
+        return {
+            "505-001": "Telstra",
+            "505-003": "Vodafone",
+            "505-006": "Optus",
+        }.get(op_key, op_key)
 
     def analyze(self, events: List[Dict]) -> List[Dict]:
         findings = []
 
-        # Collect unique cells observed
         cells = self._collect_cells(events)
         if not cells:
             return findings
 
-        operator_key = f"{self.mcc}-{self.mnc}"
-
-        # ── Rule 6 placeholder (moved to end) ────────────────────────
-        # Always report what cells were seen, for cross-reference evidence
-        all_cells = [c for c in cells if c.get("cell_id")]
-        if all_cells and not any(
+        all_cells = [c for c in cells if c.get("cell_id") and not c.get("is_pci_only")]
+        if len(all_cells) >= 2 and not any(
             f.get("title", "").startswith("Cell Summary") for f in findings
         ):
             cell_summary = []
             for c in all_cells:
-                # FIX v2.1: use per-cell MCC/MNC stored during _collect_cells
-                # Previous bug: always showed session MNC (001) for all cells
-                # including Vodafone (505-03) cells. Now reads from per-cell dict.
                 c_mcc = c.get("mcc", self.mcc)
                 c_mnc = c.get("mnc", self.mnc)
-                # Map MNC to carrier name for clarity
-                carrier_map = {"001": "Telstra", "01": "Telstra",
-                               "003": "Vodafone AU", "03": "Vodafone AU",
-                               "006": "Optus AU",   "06": "Optus AU"}
+                carrier_map = {
+                    "001": "Telstra", "01": "Telstra", "1": "Telstra",
+                    "003": "Vodafone AU", "03": "Vodafone AU", "3": "Vodafone AU",
+                    "006": "Optus AU", "06": "Optus AU", "6": "Optus AU",
+                }
                 carrier = carrier_map.get(c_mnc, f"MNC={c_mnc}")
                 cell_summary.append(
                     f"CID={c.get('cell_id')} TAC={c.get('tac','?')} "
                     f"MCC={c_mcc} MNC={c_mnc} ({carrier}) "
                     f"observations={len(c.get('events',[]))}"
                 )
-            if len(all_cells) >= 2:
-                findings.append(make_finding(
-                    detector=self.name,
-                    title=f"Cell Summary — {len(all_cells)} Unique Cell ID(s) Observed",
-                    description=(
-                        f"{len(all_cells)} unique Cell IDs observed across all captures. "
-                        f"Cross-reference these against Telstra's registered cell database "
-                        f"to identify any synthetic/rogue towers."
-                    ),
-                    severity="INFO",
-                    confidence="CONFIRMED",
-                    technique="Cell ID inventory from SIB1 beacon data",
-                    evidence=cell_summary,
-                    events=[],
-                    action=(
-                        "1. Enable OpenCelliD lookup in config.yaml to auto-verify these cells.\n"
-                        "2. Add confirmed rogue Cell IDs to known_rogue_cells in config.yaml.\n"
-                        "3. Cell IDs can be verified via ACMA's public cell register."
-                    ),
-                ))
-
+            findings.append(make_finding(
+                detector=self.name,
+                title=f"Cell Summary ? {len(all_cells)} Unique Cell ID(s) Observed",
+                description=(
+                    f"{len(all_cells)} unique Cell IDs observed across all captures. "
+                    f"Cross-reference these against registered cell databases "
+                    f"to identify any synthetic/rogue towers."
+                ),
+                severity="INFO",
+                confidence="CONFIRMED",
+                technique="Cell ID inventory from SIB1 beacon data",
+                evidence=cell_summary,
+                events=[],
+                action=(
+                    "1. Enable OpenCelliD lookup in config.yaml to auto-verify these cells.\n"
+                    "2. Add confirmed rogue Cell IDs to known_rogue_cells in config.yaml.\n"
+                    "3. Cell IDs can be verified via ACMA's public cell register."
+                ),
+            ))
 
         for cell in cells:
+            if cell.get("is_pci_only"):
+                continue
             cell_id = cell.get("cell_id")
-            earfcn   = cell.get("earfcn")
-            tac      = cell.get("tac")
-            rsrp     = cell.get("rsrp")
-            ev_list  = cell.get("events", [])
+            cid_str = str(cell_id) if cell_id is not None else ""
+            earfcns = cell.get("earfcns") or ([cell.get("earfcn")] if cell.get("earfcn") is not None else [])
+            tac = cell.get("tac")
+            rsrp = cell.get("rsrp")
+            ev_list = cell.get("events", [])
+            c_mcc = str(cell.get("mcc") or self.mcc)
+            c_mnc = str(cell.get("mnc") or self.mnc)
+            op_key = self._norm_op_key(c_mcc, c_mnc)
+            op_name = self._op_name_for(op_key)
 
-            # ── Rule 1: Known rogue cell from config ──────────────────
-            # Check both MNC formats: "001" and "01" (SIB1 uses short form)
+            # Rule 1a: Analyst rogue list (CID or eNB) ? non-CRITICAL candidate
+            enb = self._extract_enb(cell_id)
+            if cid_str in self.known_rogue_cids or (enb is not None and enb in self.known_rogue_enbs):
+                reason = f"eNB {enb}" if (cid_str not in self.known_rogue_cids and enb in self.known_rogue_enbs) else f"CID {cid_str}"
+                findings.append(make_finding(
+                    detector=self.name,
+                    title=f"Cell {cid_str} is on the analyst rogue list ({reason})",
+                    description=(
+                        f"Cell ID {cid_str} matched analyst rogue list criteria ({reason}). "
+                        f"Observed {len(ev_list)} time(s) in capture."
+                    ),
+                    severity="HIGH",
+                    confidence="SUSPECTED",
+                    technique="Analyst rogue cell/eNB list match",
+                    evidence=self._fmt_cell(cell, ev_list),
+                    events=ev_list,
+                ))
+
+            # Rule 1b: Watchlist CID
+            if cid_str in self.watchlist_cids:
+                findings.append(make_finding(
+                    detector=self.name,
+                    title=f"Watchlist cell {cid_str} observed",
+                    description=f"Cell ID {cid_str} is on the analyst watchlist.",
+                    severity="MEDIUM",
+                    confidence="SUSPECTED",
+                    technique="Watchlist cell ID match",
+                    evidence=self._fmt_cell(cell, ev_list),
+                    events=ev_list,
+                ))
+
+            # Rule 1c: Legacy confirmed rogue cell map
             mnc_short = self.mnc.lstrip("0") or "0"
             rogue_key = f"{self.mcc}-{self.mnc}-{cell_id}"
             rogue_key_short = f"{self.mcc}-{mnc_short}-{cell_id}"
@@ -131,9 +191,7 @@ class RogueTowerDetector(BaseDetector):
                 rogue_key_short if rogue_key_short in self.known_rogue_cells else None
             )
             if matched_key:
-                rogue_key = matched_key
-            if rogue_key in self.known_rogue_cells or (matched_key and matched_key in self.known_rogue_cells):
-                info = self.known_rogue_cells.get(rogue_key) or self.known_rogue_cells.get(rogue_key_short) or {}
+                info = self.known_rogue_cells.get(matched_key) or {}
                 findings.append(make_finding(
                     detector=self.name,
                     title=f"CONFIRMED ROGUE CELL: Cell ID {cell_id}",
@@ -144,7 +202,7 @@ class RogueTowerDetector(BaseDetector):
                     ),
                     severity="CRITICAL",
                     confidence="CONFIRMED",
-                    technique="Rogue Cell — matches known threat intelligence",
+                    technique="Rogue Cell ? matches known threat intelligence",
                     evidence=self._fmt_cell(cell, ev_list),
                     events=ev_list,
                     hardware_hint="Known rogue base station",
@@ -152,147 +210,152 @@ class RogueTowerDetector(BaseDetector):
                     spec_ref="CIRS-20260331-141 (investigation reference)",
                 ))
 
-            # ── Rule 2: OpenCelliD lookup ─────────────────────────────
-            if cell_id and self.opencellid_cfg.get("enabled", False):
-                db_result = self._lookup_opencellid(cell_id, self.mcc, self.mnc, tac)
-                if db_result is None:
+            # Rule 2: OpenCelliD lookup (never for PCI-only cells)
+            if cid_str and self.opencellid_cfg.get("enabled", False):
+                db_result = self._lookup_opencellid(cid_str, c_mcc, c_mnc, tac)
+                if db_result in (None, "NOT_FOUND"):
                     findings.append(make_finding(
                         detector=self.name,
-                        title=f"Cell ID {cell_id} Not in OpenCelliD Database",
+                        title=f"Cell ID {cid_str} Not in OpenCelliD Database",
                         description=(
-                            f"Cell ID {cell_id} (MCC={self.mcc} MNC={self.mnc} TAC={tac}) "
-                            f"is not registered in the OpenCelliD crowd-sourced cell tower database. "
-                            f"Legitimate operator towers are typically present in OpenCelliD. "
-                            f"An unlisted cell is a strong indicator of a synthetic/rogue tower."
+                            f"Cell ID {cid_str} (MCC={c_mcc} MNC={c_mnc} TAC={tac}) "
+                            f"is not registered in the OpenCelliD crowd-sourced cell tower database."
                         ),
                         severity="HIGH",
                         confidence="PROBABLE",
-                        technique="Rogue Cell — not in public cell database",
+                        technique="Rogue Cell ? not in public cell database",
                         evidence=self._fmt_cell(cell, ev_list),
                         events=ev_list,
-                        hardware_hint="Potential rogue eNodeB or picocell not in operator's registered network",
-                        action=(
-                            "1. Verify with Telstra's network engineering team.\n"
-                            "2. Submit cell ID + GPS coordinates to ACMA for investigation.\n"
-                            "3. Cross-reference with Rayhunter Unit 2 timeline."
-                        ),
                         spec_ref="OpenCelliD: opencellid.org",
                     ))
 
-            # ── Rule 3: Known rogue EARFCN ────────────────────────────
-            if earfcn and earfcn in self.known_rogue_earfcns:
-                findings.append(make_finding(
-                    detector=self.name,
-                    title=f"Known Rogue EARFCN {earfcn} Observed",
-                    description=(
-                        f"EARFCN {earfcn} is listed in your confirmed rogue EARFCN list. "
-                        f"Observed in {len(ev_list)} event(s)."
-                    ),
-                    severity="CRITICAL",
-                    confidence="CONFIRMED",
-                    technique="Rogue Tower — operating on confirmed rogue frequency",
-                    evidence=self._fmt_cell(cell, ev_list),
-                    events=ev_list,
-                    action="This EARFCN is confirmed rogue. Include in all legal submissions.",
-                ))
+            # Rule 3 & 4 across all observed EARFCNs for this cell
+            for ef in earfcns:
+                if ef is None:
+                    continue
+                try:
+                    ef_int = int(ef)
+                except (ValueError, TypeError):
+                    continue
 
-            # ── Rule 4: EARFCN outside operator's known bands ─────────
-            if earfcn and operator_key in OPERATOR_EARFCNS:
-                ranges = OPERATOR_EARFCNS[operator_key]
-                in_band = any(lo <= int(earfcn) <= hi for lo, hi in ranges)
-                if not in_band:
+                if ef_int in self.known_rogue_earfcns:
                     findings.append(make_finding(
                         detector=self.name,
-                        title=f"EARFCN {earfcn} Outside {self._op_name()} Operating Bands",
+                        title=f"Known Rogue EARFCN {ef_int} Observed",
                         description=(
-                            f"EARFCN {earfcn} is not within any known {self._op_name()} LTE "
-                            f"frequency band in Australia. Expected bands: "
-                            f"{', '.join(f'{lo}-{hi}' for lo,hi in ranges)}. "
-                            f"A rogue tower may be operating on an unlicensed or unexpected frequency."
+                            f"EARFCN {ef_int} is listed in your confirmed rogue EARFCN list. "
+                            f"Observed in {len(ev_list)} event(s)."
                         ),
                         severity="HIGH",
-                        confidence="PROBABLE",
-                        technique="Rogue Tower — anomalous EARFCN / out-of-band operation",
+                        confidence="SUSPECTED",
+                        technique="Rogue Tower ? operating on confirmed rogue frequency",
                         evidence=self._fmt_cell(cell, ev_list),
                         events=ev_list,
-                        hardware_hint="SDR-based rogue eNodeB (software-defined radio can operate on any frequency)",
-                        action=(
-                            "Note the exact EARFCN and any signal strength data. "
-                            "Report anomalous EARFCN to ACMA — operating outside licensed spectrum "
-                            "is a breach of the Radiocommunications Act 1992."
-                        ),
-                        spec_ref="Radiocommunications Act 1992 (Cth)",
                     ))
 
-            # ── Rule 5: Abnormally strong signal (overpower attack) ────
-            if rsrp is not None:
-                try:
-                    rsrp_val = float(rsrp)
-                    # Normal LTE RSRP: -70 to -100 dBm at typical distances
-                    # Rogue towers often overpowered: > -60 dBm
-                    if rsrp_val > -55:
+                if op_key in OPERATOR_EARFCNS:
+                    ranges = OPERATOR_EARFCNS[op_key]
+                    if not any(lo <= ef_int <= hi for lo, hi in ranges):
                         findings.append(make_finding(
                             detector=self.name,
-                            title=f"Abnormally Strong Signal (RSRP={rsrp_val:.1f} dBm)",
+                            title=f"EARFCN {ef_int} outside {op_name} Operating Bands",
                             description=(
-                                f"Observed RSRP of {rsrp_val:.1f} dBm is abnormally high. "
-                                f"Legitimate towers at typical distances show -70 to -100 dBm. "
-                                f"Rogue IMSI catchers deliberately transmit at high power to "
-                                f"force devices to prefer them over legitimate towers."
+                                f"EARFCN {ef_int} is not within any known {op_name} LTE band. "
+                                f"Expected ranges: {', '.join(f'{lo}-{hi}' for lo, hi in ranges)}."
                             ),
-                            severity="MEDIUM",
-                            confidence="SUSPECTED",
-                            technique="Signal Overpower Attack — rogue tower dominance",
+                            severity="HIGH",
+                            confidence="PROBABLE",
+                            technique="EARFCN outside operator band allocation",
                             evidence=self._fmt_cell(cell, ev_list),
                             events=ev_list,
-                            hardware_hint="High-power rogue eNodeB (deliberate overpower to attract devices)",
-                            action="Correlate RSRP spikes with identity request events to confirm attack.",
                         ))
-                except (ValueError, TypeError):
-                    pass
+
+            # Rule 5: Abnormally strong signal
+            if rsrp is not None and isinstance(rsrp, (int, float)) and rsrp > -55:
+                findings.append(make_finding(
+                    detector=self.name,
+                    title=f"Abnormally Strong Signal (RSRP={rsrp:.1f} dBm)",
+                    description=f"Observed RSRP of {rsrp:.1f} dBm is abnormally high.",
+                    severity="MEDIUM",
+                    confidence="SUSPECTED",
+                    technique="Signal Overpower Attack ? rogue tower dominance",
+                    evidence=self._fmt_cell(cell, ev_list),
+                    events=ev_list,
+                ))
 
         return findings
 
+    @staticmethod
+    def _parse_rsrp(val: Any) -> Optional[float]:
+        if val is None or isinstance(val, bool):
+            return None
+        if isinstance(val, (int, float)):
+            f = float(val)
+            return f if f == f and abs(f) != float("inf") else None
+        s = str(val).replace("dBm", "").strip()
+        if not s or s.upper() in {"N/A", "NA", "NONE", "NULL", "NAN"}:
+            return None
+        try:
+            f = float(s)
+            return f if f == f and abs(f) != float("inf") else None
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _extract_enb(cell_id: Any) -> Optional[int]:
+        try:
+            cid_int = int(str(cell_id).strip())
+            if cid_int > 255:
+                return cid_int >> 8
+        except (ValueError, TypeError):
+            pass
+        return None
+
     def _collect_cells(self, events: List[Dict]) -> List[Dict]:
-        """Group events by cell ID and deduplicate."""
+        """Group events by cell ID (or PCI fallback) and deduplicate."""
         cell_map: Dict[str, Dict] = {}
 
         for ev in events:
-            cell_id = ev.get("cell_id") or ev.get("pci")
-            earfcn   = ev.get("earfcn")
-            tac      = ev.get("tac")
-            rsrp     = ev.get("rsrp")
-            ev_mcc  = ev.get("mcc") or self.mcc
-            ev_mnc  = ev.get("mnc") or self.mnc
-            # FIX v2.1: read per-cell MCC/MNC from event dict (set by ndjson_parser
-            # from SIB1 PLMN field). Previously always used session default (001).
-            ev_mcc  = ev.get("mcc") or self.mcc
-            ev_mnc  = ev.get("mnc") or self.mnc
+            raw_cid = ev.get("cell_id")
+            has_cid = raw_cid is not None and str(raw_cid).strip() != ""
+            raw_pci = ev.get("pci")
+            is_pci_only = (not has_cid) and raw_pci is not None
+            cell_id = str(raw_cid).strip() if has_cid else raw_pci
+            earfcn = ev.get("earfcn")
+            tac = ev.get("tac")
+            rsrp_val = self._parse_rsrp(ev.get("rsrp"))
+            ev_mcc = str(ev.get("mcc") or self.mcc)
+            ev_mnc = str(ev.get("mnc") or self.mnc)
 
             if not (cell_id or earfcn):
                 continue
 
-            key = str(cell_id or f"pci_{ev.get('pci','?')}@{earfcn}")
+            key = str(cell_id) if not is_pci_only else f"pci_{raw_pci}@{earfcn}"
             if key not in cell_map:
                 cell_map[key] = {
                     "cell_id": cell_id,
-                    "earfcn":  earfcn,
-                    "tac":     tac,
-                    "rsrp":    rsrp,
-                    "mcc":     ev_mcc,
-                    "mnc":     ev_mnc,
-                    "events":  [],
+                    "is_pci_only": is_pci_only,
+                    "earfcn": earfcn,
+                    "earfcns": [earfcn] if earfcn is not None else [],
+                    "tac": tac,
+                    "rsrp": rsrp_val,
+                    "mcc": ev_mcc,
+                    "mnc": ev_mnc,
+                    "events": [],
                 }
+            else:
+                if earfcn is not None and earfcn not in cell_map[key]["earfcns"]:
+                    cell_map[key]["earfcns"].append(earfcn)
+                if earfcn is not None:
+                    cell_map[key]["earfcn"] = earfcn
+                if tac is not None and cell_map[key]["tac"] is None:
+                    cell_map[key]["tac"] = tac
+
             cell_map[key]["events"].append(ev)
-            # Track best (highest) RSRP reading
-            if rsrp and (cell_map[key]["rsrp"] is None or
-                         (cell_map[key]["rsrp"] is not None and
-                          float(str(rsrp).replace("dBm","").strip()) >
-                          float(str(cell_map[key]["rsrp"]).replace("dBm","").strip()))):
-                try:
-                    cell_map[key]["rsrp"] = float(str(rsrp).replace("dBm","").strip())
-                except (ValueError, TypeError):
-                    pass
+            if rsrp_val is not None:
+                cur = cell_map[key]["rsrp"]
+                if cur is None or rsrp_val > cur:
+                    cell_map[key]["rsrp"] = rsrp_val
 
         return list(cell_map.values())
 
@@ -326,9 +389,12 @@ class RogueTowerDetector(BaseDetector):
                 self._save_cache()
                 return data
             elif data.get("status") == "error":
-                self._cell_cache[cache_key] = None
-                self._save_cache()
-                return None
+                msg = str(data.get("message", "")).lower()
+                if "not found" in msg:
+                    self._cell_cache[cache_key] = "NOT_FOUND"
+                    self._save_cache()
+                    return "NOT_FOUND"
+                return {}
         except Exception as e:
             pass
 
@@ -370,4 +436,7 @@ class RogueTowerDetector(BaseDetector):
             first = events[0]
             lines.append(f"First seen: {first.get('timestamp','?')} in {first.get('source_file','?')}")
         return lines
+
+
+
 

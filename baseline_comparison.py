@@ -302,3 +302,109 @@ if __name__ == "__main__":
             print("Error: --baseline and --investigation required for compare mode")
             sys.exit(1)
         compare_against_baseline(args.baseline, args.investigation)
+
+
+COUNT_METRICS = (
+    "identity_request",
+    "identity_request_imsi",
+    "identity_request_imsi_plain",
+    "auth_request",
+    "rrc_release",
+)
+
+
+def _parse_int_auto(val) -> Optional[int]:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        return int(s, 0)
+    except ValueError:
+        return None
+
+
+def parse_rows(rows: List[List[str]]) -> Dict:
+    """Parse tabular NAS/RRC rows into metric counts and capture duration."""
+    counts = {k: 0 for k in COUNT_METRICS}
+    timestamps: List[float] = []
+
+    for row in rows:
+        if not row:
+            continue
+        ts_val = None
+        if len(row) > 0 and str(row[0]).strip():
+            try:
+                ts_val = float(str(row[0]).strip())
+                timestamps.append(ts_val)
+            except ValueError:
+                pass
+
+        msg_code = _parse_int_auto(row[1]) if len(row) > 1 else None
+        id_code = _parse_int_auto(row[2]) if len(row) > 2 else None
+        sec_hdr = str(row[3]).strip() if len(row) > 3 else ""
+        desc = str(row[4]).strip().lower() if len(row) > 4 else ""
+
+        is_id_req = (msg_code == 0x55) or ("identity request" in desc)
+        is_auth_req = (msg_code == 0x52) or ("authentication request" in desc)
+        is_rrc_rel = ("rrcconnectionrelease" in desc) or ("rrc connection release" in desc)
+
+        if is_id_req:
+            counts["identity_request"] += 1
+            if id_code == 1:
+                counts["identity_request_imsi"] += 1
+                if sec_hdr in ("0", ""):
+                    counts["identity_request_imsi_plain"] += 1
+
+        if is_auth_req:
+            counts["auth_request"] += 1
+
+        if is_rrc_rel:
+            counts["rrc_release"] += 1
+
+    duration_s = (max(timestamps) - min(timestamps)) if len(timestamps) >= 2 else 0.0
+    return {
+        "counts": counts,
+        "duration_s": duration_s,
+    }
+
+
+def compare_profiles(base: Dict, inv: Dict, ratio_threshold: float = 3.0, min_excess_per_hour: float = 1.0) -> Dict:
+    """Compare hourly metric rates between a baseline profile and an investigation profile."""
+    base_hours = float(base.get("hours") or 1.0)
+    inv_hours = float(inv.get("hours") or 1.0)
+    if base_hours <= 0:
+        base_hours = 1.0
+    if inv_hours <= 0:
+        inv_hours = 1.0
+
+    base_counts = base.get("counts", {})
+    inv_counts = inv.get("counts", {})
+    all_metrics = list(dict.fromkeys(list(COUNT_METRICS) + list(base_counts.keys()) + list(inv_counts.keys())))
+
+    results = []
+    for metric in all_metrics:
+        b_cnt = float(base_counts.get(metric, 0) or 0)
+        i_cnt = float(inv_counts.get(metric, 0) or 0)
+        b_rate = b_cnt / base_hours
+        i_rate = i_cnt / inv_hours
+        excess_rate = i_rate - b_rate
+
+        is_excess = False
+        if excess_rate > min_excess_per_hour:
+            if b_rate <= 0:
+                is_excess = i_cnt > 0
+            else:
+                is_excess = (i_rate / b_rate) >= ratio_threshold
+
+        results.append({
+            "metric": metric,
+            "baseline_count": b_cnt,
+            "investigation_count": i_cnt,
+            "baseline_rate_per_h": round(b_rate, 4),
+            "investigation_rate_per_h": round(i_rate, 4),
+            "flag": "EXCEEDS_BASELINE" if is_excess else "consistent",
+        })
+
+    return {"metrics": results}
