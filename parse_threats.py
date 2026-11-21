@@ -2,6 +2,7 @@ import argparse
 import csv
 import json
 import os
+from pathlib import Path
 
 INPUT_FILE = "master_analysis_report.json"
 OUTPUT_CSV = "master_threats_only.csv"
