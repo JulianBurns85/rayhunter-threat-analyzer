@@ -99,3 +99,11 @@ rayhunter_report_*.json.sha256.seal
 *.seal
 rayhunter_forensic_map_*.kml
 
+
+# Local capture sets, triage outputs & archives
+raymum4*/
+_archive_duplicates/
+run*.txt
+identity_triage*.csv
+dropped_*.csv
+unsynced_clock.csv
