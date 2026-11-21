@@ -107,3 +107,6 @@ run*.txt
 identity_triage*.csv
 dropped_*.csv
 unsynced_clock.csv
+
+# Local PowerShell triage scripts
+*.ps1
