@@ -110,3 +110,7 @@ unsynced_clock.csv
 
 # Local PowerShell triage scripts
 *.ps1
+
+# Generated report artifacts & local diagnostics
+rayhunter_report*.zip
+scat_diag/
