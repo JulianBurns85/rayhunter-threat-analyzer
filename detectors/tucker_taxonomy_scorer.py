@@ -218,14 +218,14 @@ class TuckerTaxonomyScorer(BaseDetector):
         evidence += [
             f"",
             f"FORENSIC SIGNIFICANCE:",
-            f"  IER of {ier:.1f}% significantly exceeds both the legitimate network",
+            f"  IER of {ier:.1f}% {'exceeds' if exceeds_court else 'is BELOW'} the Tucker et al. court event median ({COURT_EVENT_IER_MEDIAN}%).",
             f"  maximum ({LEGITIMATE_IER_MAX}%) and the Tucker et al. court event",
             f"  median ({COURT_EVENT_IER_MEDIAN}%). This corpus demonstrates",
             f"  IMSI exposure characteristics consistent with confirmed court-evidenced",
             f"  IMSI catcher deployments documented in Tucker et al. NDSS 2025.",
         ]
 
-        severity   = "CRITICAL" if ier > COURT_EVENT_IER_MEDIAN else "HIGH"
+        severity   = "CRITICAL" if exceeds_court else ("MEDIUM" if exceeds_legit else "INFO")
         confidence = "CONFIRMED" if cat_a_confirmed >= 3 else "PROBABLE"
 
         findings.append(make_finding(
@@ -259,7 +259,7 @@ class TuckerTaxonomyScorer(BaseDetector):
             ),
             action=(
                 "1. Cite Tucker et al. NDSS 2025 formally in AFP submission.\n"
-                "2. IER of " + f"{ier:.1f}% exceeds court event median — statistically significant.\n"
+                "2. IER of " + f"{ier:.1f}% {'exceeds' if exceeds_court else 'is below'} court event median ({COURT_EVENT_IER_MEDIAN}%).\n"
                 "3. Category A message confirmations are the strongest individual evidence.\n"
                 "4. Include per-message table in evidence package.\n"
                 "5. p<<0.005 significance level suitable for expert witness testimony."

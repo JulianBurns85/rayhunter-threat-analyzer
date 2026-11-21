@@ -184,7 +184,7 @@ class PlatformFusionEngine:
         if p.flashcatch:          score += 0.05
         if p.wallet_inspector:    score += 0.10
         if p.regulatory_response: score += 0.05
-        if p.tucker_ier and p.tucker_ier > 0.15: score += 0.05
+        if p.tucker_ier and p.tucker_ier >= 0.286: score += 0.05
         return min(round(score, 3), 1.0)
 
     def _hypothesis_defeater(self, p: PlatformProfile) -> Dict[str, float]:
@@ -192,11 +192,11 @@ class PlatformFusionEngine:
         macro = 1.0
         rogue = 0.1
 
-        # Cross-carrier eliminates repeater
+        # Multiple TACs can occur from normal mobility; do not collapse macro/repeater on TAC count alone
         has_cross_carrier = len(set(p.tac_clusters)) > 1
         if has_cross_carrier:
-            repeater *= 0.001
-            rogue += 0.30
+            repeater *= 0.5
+            rogue += 0.05
 
         if p.handover_inject_count > 10:
             repeater *= 0.001
@@ -226,10 +226,16 @@ class PlatformFusionEngine:
             rogue += 0.05
 
         total = repeater + macro + rogue
+        rogue_prob = rogue / total
+        # Without byte-backed IMSI/cipher-downgrade evidence, cap rogue probability at 0.50
+        if not p.wallet_inspector:
+            rogue_prob = min(rogue_prob, 0.50)
+        rem = max(1.0 - rogue_prob, 0.0)
+        non_rogue = max(repeater + macro, 1e-9)
         return {
-            "cel_fi_repeater": round(repeater / total, 4),
-            "legitimate_carrier_edge_case": round(macro / total, 4),
-            "active_rogue_platform": round(min(rogue / total, 0.9999), 4),
+            "cel_fi_repeater": round(rem * (repeater / non_rogue), 4),
+            "legitimate_carrier_edge_case": round(rem * (macro / non_rogue), 4),
+            "active_rogue_platform": round(rogue_prob, 4),
         }
 
     def format_summary(self) -> str:

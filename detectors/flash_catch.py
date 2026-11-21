@@ -31,7 +31,7 @@ class FlashCatchDetector(BaseDetector):
       +1  different eNB from home cells
       +1  same frequency band as home cell (frequency displacement)
       +1  Auth Reject within 60s of flash
-    Threshold: score >= 2 to fire, >= 3 for CONFIRMED
+    Threshold: score >= 3 to fire, >= 3 for CONFIRMED
     """
 
     name        = "FlashCatchDetector"
@@ -106,7 +106,7 @@ class FlashCatchDetector(BaseDetector):
                 bool(nearby_rejects),
             ])
 
-            if score < 2:
+            if score < 3:
                 continue
 
             severity   = "CRITICAL" if score >= 3 else "HIGH"

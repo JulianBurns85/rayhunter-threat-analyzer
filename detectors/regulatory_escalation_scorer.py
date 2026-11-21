@@ -165,6 +165,14 @@ class RegulatoryEscalationScorer(BaseDetector):
         if castnet_path:
             daily_counts = self._load_daily_counts(castnet_path)
 
+        # Data-driven gate: skip if current capture set has no events in the regulatory window
+        if not daily_counts or not any(d in daily_counts for d in ('2026-05-08', '2026-05-30', '2026-06-02')):
+            return findings
+
+        # Data-driven gate: skip if current capture set has no events in the regulatory window
+        if not daily_counts or not any(d in daily_counts for d in ('2026-05-08', '2026-05-30', '2026-06-02')):
+            return findings
+
         # Build regulatory timeline analysis
         timeline_analysis = self._analyze_timeline(daily_counts)
 

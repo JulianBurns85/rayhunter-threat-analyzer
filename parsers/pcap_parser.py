@@ -235,7 +235,7 @@ class PcapParser:
         if id_type:
             identity_type = NAS_ID_TYPE_MAP.get(id_type.lower())
         if not identity_type and msg_type == "Identity Request":
-            identity_type = "IMSI"
+            identity_type = "UNKNOWN"
 
         # Cell fields
         cid = None
@@ -441,7 +441,8 @@ class PcapParser:
                     nb = payload[i + 1]
                     if nb == 0x55:
                         ev["msg_type"]      = "Identity Request"
-                        ev["identity_type"] = "IMSI"
+                        id_nibble = (payload[i + 2] & 0x07) if (i + 2) < len(payload) else 0
+                        ev["identity_type"] = {1: "IMSI", 2: "IMEI", 3: "IMEISV", 4: "TMSI"}.get(id_nibble, "UNKNOWN")
                         break
                     elif nb == 0x5C:
                         ev["msg_type"] = "Security Mode Command"

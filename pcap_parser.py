@@ -234,15 +234,21 @@ class PcapParser:
                     ev["integrity_alg"] = str(integrity)
 
             # Identity type
-            id_type = getattr(nas, "nas_eps_emm_type_of_id", None)
-            if id_type:
-                id_str = str(id_type).lower()
-                if "imsi" in id_str or id_str == "1":
+            id_type = getattr(nas, "nas_eps_emm_id_type2", None) or getattr(nas, "nas_eps_emm_type_of_id", None)
+            if id_type is not None:
+                id_str = str(id_type).strip().lower()
+                if id_str in ("1", "0x01", "imsi") or ("imsi" in id_str and "imeisv" not in id_str):
                     ev["identity_type"] = "IMSI"
-                elif "imei" in id_str or id_str in ("2", "3"):
-                    ev["identity_type"] = "IMEI/IMEISV"
-                elif "tmsi" in id_str or id_str == "4":
+                elif id_str in ("3", "0x03", "imeisv") or "imeisv" in id_str:
+                    ev["identity_type"] = "IMEISV"
+                elif id_str in ("2", "0x02", "imei") or "imei" in id_str:
+                    ev["identity_type"] = "IMEI"
+                elif id_str in ("4", "0x04", "tmsi") or "tmsi" in id_str:
                     ev["identity_type"] = "TMSI"
+                elif id_str in ("6", "0x06", "guti") or "guti" in id_str:
+                    ev["identity_type"] = "GUTI"
+                else:
+                    ev["identity_type"] = f"UNKNOWN({id_str})"
 
             # Paging type
             if "paging" in str(ev.get("msg_type", "")).lower():

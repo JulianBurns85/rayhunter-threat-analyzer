@@ -121,6 +121,10 @@ class RRCPeriodicityDetector:
         sd_ms  = (statistics.stdev(in_range) * 1000.0
                   if len(in_range) > 1 else 0.0)
         machine_precision = sd_ms < self.sd_threshold_ms
+        if not machine_precision:
+            return []
+        if not machine_precision:
+            return []
 
         carriers: Dict[str, int] = {}
         for r in releases:

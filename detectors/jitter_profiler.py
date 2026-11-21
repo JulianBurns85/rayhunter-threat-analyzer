@@ -74,6 +74,10 @@ class RRCJitterProfiler(BaseDetector):
             cells_to_analyse["__ALL__"] = all_releases
 
         for cid, timestamps in cells_to_analyse.items():
+            if cid in ('unknown', '__ALL__'):
+                continue
+            if cid in ('unknown', '__ALL__'):
+                continue
             ts_sorted = sorted(timestamps)
             if len(ts_sorted) < self.MIN_INTERVALS + 1:
                 continue
@@ -109,7 +113,7 @@ class RRCJitterProfiler(BaseDetector):
                     sig_delta_ms = abs(mean_s - sig_mean) * 1000
                     break
 
-            is_rogue_jitter = stdev_ms > self.ROGUE_JITTER_MIN_MS
+            is_rogue_jitter = (stdev_ms > self.ROGUE_JITTER_MIN_MS) and (cv < 15.0)
 
             if not (matched_sig or is_rogue_jitter):
                 continue

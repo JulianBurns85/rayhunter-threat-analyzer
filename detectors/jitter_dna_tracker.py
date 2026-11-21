@@ -100,7 +100,7 @@ class JitterDNATracker(BaseDetector):
         b_timestamps = self._load_timestamps(castnet_path)
         if len(b_timestamps) < MIN_EVENTS:
             # Use hardcoded confirmed values from corpus
-            return self._build_from_confirmed_values()
+            return findings  # data-driven only: no hardcoded corpus fallback
 
         # Compute inter-event intervals
         intervals_ms = self._compute_intervals_ms(b_timestamps)
@@ -120,7 +120,7 @@ class JitterDNATracker(BaseDetector):
 
         # If dna is None (not enough srsRAN intervals), fall back to confirmed values
         if dna is None:
-            return self._build_from_confirmed_values()
+            return findings  # data-driven only: no hardcoded corpus fallback
 
         evidence = self._build_evidence(
             intervals_ms, srsran_intervals, dna, daily_jitter, swap_events

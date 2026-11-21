@@ -75,7 +75,7 @@ def _identity_is_imsi(ev: Dict, raw_msg: str) -> bool:
     idt = str(ev.get("identity_type") or ev.get("id_type") or "").lower()
     if "imsi" in idt:
         return True
-    if any(t in idt for t in ("imeisv", "imei", "guti", "tmsi")):
+    if idt in ("2", "3", "4", "6") or any(t in idt for t in ("imeisv", "imei", "guti", "tmsi")):
         return False
     # Fall back to raw text only if it explicitly says IMSI and not IMEISV.
     return ("imsi" in raw_msg) and ("imeisv" not in raw_msg)

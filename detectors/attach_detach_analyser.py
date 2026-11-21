@@ -94,7 +94,8 @@ class AttachDetachCycleAnalyser(BaseDetector):
             return []
 
         attach_ts.sort()
-        detach_ts.sort()
+        attach_ts = self._dedup_ts(attach_ts, 1.0)
+        detach_ts = self._dedup_ts(detach_ts, 1.0)
 
         # Calculate hourly rates
         all_ts = sorted(attach_ts + detach_ts)
@@ -112,22 +113,40 @@ class AttachDetachCycleAnalyser(BaseDetector):
         peak_attach_rate = self._peak_hourly_rate(attach_ts)
         peak_detach_rate = self._peak_hourly_rate(detach_ts)
 
-        # Cycle time analysis (attach → detach pairs)
+        # Cycle time analysis (per-file deduplicated attach -> detach pairs)
+        from collections import defaultdict as _dd
+        per_file_attach = _dd(list)
+        per_file_detach = _dd(list)
+        for _e in events:
+            _ts = _e.get("timestamp") or _e.get("ts")
+            if _ts is None:
+                continue
+            try:
+                _ts = float(_ts)
+            except (TypeError, ValueError):
+                continue
+            _msg = str(_e.get("msg_type") or _e.get("message_type") or "").lower()
+            _src = str(_e.get("source_file") or _e.get("file") or _e.get("pcap_file") or "unknown")
+            if any(t in _msg for t in ATTACH_TYPES):
+                per_file_attach[_src].append(_ts)
+            elif any(t in _msg for t in DETACH_TYPES):
+                per_file_detach[_src].append(_ts)
+
         rapid_cycles = []
-        for a_ts in attach_ts:
-            # Find first detach after this attach within 5 minutes
-            for d_ts in detach_ts:
-                if a_ts < d_ts <= a_ts + MAX_ORGANIC_CYCLE_S:
-                    cycle_s = d_ts - a_ts
-                    if cycle_s <= RAPID_CYCLE_S:
-                        ts_str = datetime.fromtimestamp(a_ts, tz=timezone.utc).isoformat()
-                        rapid_cycles.append({
-                            "attach_ts": a_ts,
-                            "detach_ts": d_ts,
-                            "cycle_s":   cycle_s,
-                            "ts_str":    ts_str,
-                        })
-                    break
+        for _src, _a_list in per_file_attach.items():
+            _a_clean = self._dedup_ts(_a_list, 1.0)
+            _d_clean = self._dedup_ts(per_file_detach.get(_src, []), 1.0)
+            _d_idx = 0
+            for a_ts in _a_clean:
+                while _d_idx < len(_d_clean) and _d_clean[_d_idx] < a_ts:
+                    _d_idx += 1
+                if _d_idx < len(_d_clean):
+                    d_ts = _d_clean[_d_idx]
+                    delta = d_ts - a_ts
+                    cycle_s = delta
+                    if 0 < delta <= RAPID_CYCLE_S:
+                        rapid_cycles.append(delta)
+                        _d_idx += 1  # pair each detach at most once
 
         # Night-time high rate analysis (00:00-06:00 AEST)
         night_attach = [
@@ -140,9 +159,10 @@ class AttachDetachCycleAnalyser(BaseDetector):
         is_suspicious = attach_rate > MAX_ORGANIC_RATE_PER_HOUR
         is_rogue      = (
             attach_rate > ROGUE_RATE_PER_HOUR or
-            len(rapid_cycles) >= 5 or
-            (night_rate > MAX_ORGANIC_RATE_PER_HOUR and len(night_attach) >= 5)
+            (peak_attach_rate > ROGUE_RATE_PER_HOUR and len(rapid_cycles) >= 5) or
+            (night_rate > ROGUE_RATE_PER_HOUR and len(night_attach) >= 5)
         )
+        is_suspicious = is_suspicious or (len(rapid_cycles) >= 5)
 
         if not (is_suspicious or is_rogue):
             return []
@@ -188,7 +208,7 @@ class AttachDetachCycleAnalyser(BaseDetector):
                 f"at 3am. This indicates automated platform operation."
             )
 
-        severity   = "CRITICAL" if is_rogue    else "HIGH"
+        severity   = "CRITICAL" if is_rogue else ("HIGH" if attach_rate > MAX_ORGANIC_RATE_PER_HOUR else "MEDIUM")
         confidence = "CONFIRMED" if len(rapid_cycles) >= 5 else "PROBABLE"
 
         findings.append(make_finding(
@@ -201,7 +221,7 @@ class AttachDetachCycleAnalyser(BaseDetector):
             ),
             description=(
                 f"Attach/detach cycle rate of {attach_rate:.1f}/hour "
-                f"({'exceeds' if is_rogue else 'approaches'} the "
+                f"({'exceeds' if attach_rate > ROGUE_RATE_PER_HOUR else 'is below'} the "
                 f"{ROGUE_RATE_PER_HOUR:.0f}/hour rogue threshold). "
                 f"Organic suburban residential traffic produces 0.5-"
                 f"{MAX_ORGANIC_RATE_PER_HOUR:.0f} events/hour. "
@@ -236,6 +256,19 @@ class AttachDetachCycleAnalyser(BaseDetector):
         ))
 
         return findings
+
+
+    @staticmethod
+    def _dedup_ts(ts_list: List[float], window_s: float = 1.0) -> List[float]:
+        """Collapse double-logged NAS wrapper frames within window_s of each other."""
+        if not ts_list:
+            return []
+        ts_sorted = sorted(ts_list)
+        out = [ts_sorted[0]]
+        for t in ts_sorted[1:]:
+            if t - out[-1] > window_s:
+                out.append(t)
+        return out
 
     def _peak_hourly_rate(self, timestamps: List[float]) -> float:
         """Calculate peak events per hour in any 1-hour window."""

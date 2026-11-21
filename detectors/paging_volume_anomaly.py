@@ -88,7 +88,9 @@ class PagingVolumeAnomalyDetector(BaseDetector):
                     imsi_paging_ts.append(ts)
 
             if any(t in msg for t in IMSI_TYPES):
-                harvest_ts.append(ts)
+                idt = str(e.get('identity_type') or e.get('id_type') or '').upper()
+                if idt == 'IMSI':
+                    harvest_ts.append(ts)
 
         if not paging_ts:
             return []
@@ -197,7 +199,7 @@ class PagingVolumeAnomalyDetector(BaseDetector):
                 f"(< 0.05 = machine precision)"
             )
 
-        severity   = "CRITICAL" if (spikes_before_harvest and imsi_paging_ts) else "HIGH"
+        severity   = "CRITICAL" if (spikes_before_harvest and imsi_paging_ts) else ("HIGH" if imsi_paging_ts else "INFO")
         confidence = "CONFIRMED" if len(spikes_before_harvest) >= 3 else "PROBABLE"
 
         findings.append(make_finding(

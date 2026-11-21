@@ -39,7 +39,7 @@ IDENTITY_TYPE_LABELS = {
 IDENTITY_TYPE_SEVERITY = {
     "IMSI":   "CRITICAL",   # subscriber identity — primary target
     "IMEI":   "HIGH",       # hardware identity — device fingerprinting
-    "IMEISV": "HIGH",       # hardware + SW version — targeted fingerprinting
+    "IMEISV": "INFO",       # hardware + SW version — targeted fingerprinting
     "TMSI":   "MEDIUM",     # temporary — presence confirmation
     "GUTI":   "MEDIUM",     # temporary — presence confirmation
     None:     "CRITICAL",   # unknown type — assume worst case
@@ -98,7 +98,7 @@ class IdentityHarvestDetector(BaseDetector):
                     f"frames 650, 1098, 1970, 2639 all decode as msg_emm_type=0x55, "
                     f"id_type2=IMEISV (3). Source: 3GPP TS 24.301 §5.4.4.3."
                 ),
-                severity="HIGH",
+                severity="INFO",
                 confidence="CONFIRMED",
                 technique="IMEISV Harvesting / Targeted Device Fingerprinting",
                 evidence=self._format_evidence(imeisv_reqs),
